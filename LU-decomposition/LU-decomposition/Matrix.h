@@ -136,6 +136,7 @@ public:
 		}
 	}
 
+	// Обычный алгоритм (последовательная версия)
 	void LU2_sequential() {
 		T *ptr1 = data, *ptr2;
 		T mult;
@@ -154,6 +155,7 @@ public:
 		}
 	}
 	
+	// Обычный алгоритм (параллельная версия)
 	void LU2_parallel() {
 		T *ptr1 = data, *ptr2;
 		T mult;
@@ -173,6 +175,7 @@ public:
 		}
 	}
 
+	// Блочный алгоритм (параллельная версия)
 	void LU3_block() {
 		T *dptr = data;
 		const int bs = 100;	  // размер блока
@@ -184,12 +187,14 @@ public:
 			LSolve(dptr, dptr + bs, n, bs, n - nbi);
 			USolve(dptr, dptr + bs*n, n, n - nbi, bs);
 
-			FMS(dptr + bs*n, dptr + bs, dptr + bs*(n + 1), n, n, n, n - nbi, bs, n - nbi);
+			FMMS(dptr + bs*n, dptr + bs, dptr + bs*(n + 1), n, n, n, n - nbi, bs, n - nbi);
 		}
 		LU(dptr, n, n-bi);
 	}
 
 private:
+
+	// Общий алгоритм умножения матриц 
 	void Mult(const T* a_ptr, const T* b_ptr, T *c_ptr, const int lda, const int ldb, const int ldc, const int m, const int n, const int p) {
 		//int bp, cp;
 
@@ -206,8 +211,9 @@ private:
 		}
 	}
 
-	// занимает >90% общего времени работы
-	void FMS(const T *a_ptr, const T *b_ptr, T *c_ptr, const int lda, const int ldb, const int ldc, const int m, const int n, const int p) {
+	// "Fused Matrix Multiply - Subtract" - "C = C - A*B"
+	// Занимает >90% общего времени работы
+	void FMMS(const T *a_ptr, const T *b_ptr, T *c_ptr, const int lda, const int ldb, const int ldc, const int m, const int n, const int p) {
 
 	#pragma omp parallel for
 		for (int i = 0; i < m; ++i) {
@@ -224,6 +230,7 @@ private:
 		}
 	}
 
+	// Общее LU-разложение (применяется для блока в матрице)
 	void LU(T *a_ptr, const int lda, const int n) {
 		T *ptr1 = a_ptr, // указатель на текущую вычитаемую строку 
 		  *ptr2,		 // указатель на текущую уменьшаемую строку
@@ -244,6 +251,7 @@ private:
 		}
 	}
 
+	// Решение системы LX = B; L - верхнетреугольная матрица, X,B - подходящие прямоугольные матрицы (одинакового размера)
 	void LSolve(const T *l_ptr, T *a_ptr, const int lda, const int m, const int n) {
 		// m - высота обеих матриц, n - длина искомой матрицы
 		const int block_size = m, num_of_blocks = (n+m-1)/m;
@@ -270,6 +278,7 @@ private:
 		}
 	}
 
+	// Решение системы XU = B; U - верхнетреугольная матрица, X,B - подходящие прямоугольные матрицы (одинакового размера)
 	void USolve(const T *u_ptr, T *a_ptr, const int lda, const int m, const int n) {
 		// m - высота искомой матрицы, n - длина обеих матриц
 		const int block_size = n, num_of_blocks = (m + n - 1)/n;
