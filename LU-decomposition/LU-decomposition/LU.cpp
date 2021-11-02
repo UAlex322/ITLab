@@ -18,7 +18,6 @@ void LU1(MTX_TYPE *A, MTX_TYPE *L, MTX_TYPE *U, size_t n) {
 		for (size_t i = j+1; i < n; ++i) {
 			mult = U[i*n+j]/U[j*(n+1)];
 			L[i*n+j] = mult;
-#pragma omp parallel for
 			for (size_t k = j; k < n; ++k) {
 				U[i*n+k] -= mult*U[j*n+k];
 				if (abs(U[i*n+k]) < eps) U[i*n+k] = 0.0;

@@ -3,7 +3,6 @@
 #include <cmath>
 
 #define MTX_TYPE double
-#define eps 1e-12
 
 void LU(MTX_TYPE* A, MTX_TYPE* L, MTX_TYPE* U, size_t n);
 
@@ -22,7 +21,8 @@ void LU1(Matrix<T> &A, Matrix<T> &L, Matrix<T> &U) {
 		for (size_t i = j+1; i < n; ++i) {
 			mult = U(i,j)/U(j,j);
 			L(i,j) = mult;
-			for (size_t k = j+1; k < n; ++k) {
+	//#pragma omp parallel for
+			for (size_t k = j; k < n; ++k) {
 				U(i,k) -= mult*U(j,k);
 				if (abs(U(i,k)) < eps) U(i,k) = 0.0;
 			}
