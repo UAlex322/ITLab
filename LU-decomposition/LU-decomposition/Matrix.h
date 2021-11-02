@@ -81,30 +81,32 @@ public:
 
 	Matrix &operator+=(const Matrix &mtx) {
 		T *m_ptr = mtx.data;
-		for (int i = 0; i < m; ++i)
-			for (int j = 0; j < n; ++j)
-				data[i*n + j] += m_ptr[i*n + j];
+
+		for (int i = 0; i < m*n; ++i)
+			data[i] += m_ptr[i];
 
 		return *this;
 	}
 
 	Matrix &operator-=(const Matrix &mtx) {
 		T *m_ptr = mtx.data;
-		for (int i = 0; i < m; ++i)
-			for (int j = 0; j < n; ++j)
-				data[i*n + j] -= m_ptr[i*n + j];
+
+		for (int i = 0; i < m*n; ++i)
+			data[i] -= m_ptr[i];
 
 		return *this;
 	}
 
 	Matrix operator*(const Matrix &b) {
 		Matrix<T> c(m, b.n);
+		int p = b.n;
 
 		for (int i = 0; i < n; ++i)
 			for (int j = 0; j < p; ++j)
 				c.data[i*p + j] = 0.0;
 
 		Mult(data, b.data, c.data, n, p, p, m, n, b.n);
+
 		return c;
 	}
 
