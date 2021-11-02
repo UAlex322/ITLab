@@ -4,7 +4,7 @@
 #include <ctime>
 #include <chrono>
 #include <mkl.h>
-#include "LU.h"
+#include "Matrix.h"
 using namespace std;
 
 #define MTX_TYPE double

@@ -175,8 +175,8 @@ public:
 
 	void LU3_block() {
 		T *dptr = data;
-		const int bs = 100;	  // размер блока
-		int bi = 0, nbi = bs; // индексы начала текущего и следующего блоков
+		const int bs = 100;	  // СЂР°Р·РјРµСЂ Р±Р»РѕРєР°
+		int bi = 0, nbi = bs; // РёРЅРґРµРєСЃС‹ РЅР°С‡Р°Р»Р° С‚РµРєСѓС‰РµРіРѕ Рё СЃР»РµРґСѓСЋС‰РµРіРѕ Р±Р»РѕРєРѕРІ
 
 		for (; nbi < n; dptr += bs*(n+1), bi += bs, nbi += bs) {
 			LU(dptr, n, bs);
@@ -206,7 +206,7 @@ private:
 		}
 	}
 
-	// занимает >90% общего времени работы
+	// Р·Р°РЅРёРјР°РµС‚ >90% РѕР±С‰РµРіРѕ РІСЂРµРјРµРЅРё СЂР°Р±РѕС‚С‹
 	void FMS(const T *a_ptr, const T *b_ptr, T *c_ptr, const int lda, const int ldb, const int ldc, const int m, const int n, const int p) {
 
 	#pragma omp parallel for
@@ -225,9 +225,9 @@ private:
 	}
 
 	void LU(T *a_ptr, const int lda, const int n) {
-		T *ptr1 = a_ptr, // указатель на текущую вычитаемую строку 
-		  *ptr2,		 // указатель на текущую уменьшаемую строку
-		  mult;			 // множитель, на который умножается вычитаемая строка
+		T *ptr1 = a_ptr, // СѓРєР°Р·Р°С‚РµР»СЊ РЅР° С‚РµРєСѓС‰СѓСЋ РІС‹С‡РёС‚Р°РµРјСѓСЋ СЃС‚СЂРѕРєСѓ 
+		  *ptr2,		 // СѓРєР°Р·Р°С‚РµР»СЊ РЅР° С‚РµРєСѓС‰СѓСЋ СѓРјРµРЅСЊС€Р°РµРјСѓСЋ СЃС‚СЂРѕРєСѓ
+		  mult;			 // РјРЅРѕР¶РёС‚РµР»СЊ, РЅР° РєРѕС‚РѕСЂС‹Р№ СѓРјРЅРѕР¶Р°РµС‚СЃСЏ РІС‹С‡РёС‚Р°РµРјР°СЏ СЃС‚СЂРѕРєР°
 
 		for (int j = 0; j < n - 1; ++j, ptr1 += lda) {
 			ptr2 = ptr1 + lda;
@@ -245,16 +245,16 @@ private:
 	}
 
 	void LSolve(const T *l_ptr, T *a_ptr, const int lda, const int m, const int n) {
-		// m - высота обеих матриц, n - длина искомой матрицы
+		// m - РІС‹СЃРѕС‚Р° РѕР±РµРёС… РјР°С‚СЂРёС†, n - РґР»РёРЅР° РёСЃРєРѕРјРѕР№ РјР°С‚СЂРёС†С‹
 		const int block_size = m, num_of_blocks = (n+m-1)/m;
 
 	#pragma omp parallel for
 		for (int it = 0; it < num_of_blocks; ++it) {
-			int block_len = (it+1 == num_of_blocks) ? ((n % block_size != 0) ? n % block_size : block_size) : block_size; // длина текущего блока
-			T *na_ptr = a_ptr + block_size*it, // указатель на начало текущего блока
-			  *ptr1 = na_ptr,				   // указатель на текущую вычитаемую строку
-			  *ptr2,						   // указатель на текущую уменьшаемую строку
-			  mult;							   // множитель, на который умножается вычитаемая строка
+			int block_len = (it+1 == num_of_blocks) ? ((n % block_size != 0) ? n % block_size : block_size) : block_size; // РґР»РёРЅР° С‚РµРєСѓС‰РµРіРѕ Р±Р»РѕРєР°
+			T *na_ptr = a_ptr + block_size*it, // СѓРєР°Р·Р°С‚РµР»СЊ РЅР° РЅР°С‡Р°Р»Рѕ С‚РµРєСѓС‰РµРіРѕ Р±Р»РѕРєР°
+			  *ptr1 = na_ptr,				   // СѓРєР°Р·Р°С‚РµР»СЊ РЅР° С‚РµРєСѓС‰СѓСЋ РІС‹С‡РёС‚Р°РµРјСѓСЋ СЃС‚СЂРѕРєСѓ
+			  *ptr2,						   // СѓРєР°Р·Р°С‚РµР»СЊ РЅР° С‚РµРєСѓС‰СѓСЋ СѓРјРµРЅСЊС€Р°РµРјСѓСЋ СЃС‚СЂРѕРєСѓ
+			  mult;							   // РјРЅРѕР¶РёС‚РµР»СЊ, РЅР° РєРѕС‚РѕСЂС‹Р№ СѓРјРЅРѕР¶Р°РµС‚СЃСЏ РІС‹С‡РёС‚Р°РµРјР°СЏ СЃС‚СЂРѕРєР°
 
 			for (int j = 0; j < block_size - 1; ++j, ptr1 += lda) {
 				ptr2 = ptr1 + lda;
@@ -271,16 +271,16 @@ private:
 	}
 
 	void USolve(const T *u_ptr, T *a_ptr, const int lda, const int m, const int n) {
-		// m - высота искомой матрицы, n - длина обеих матриц
+		// m - РІС‹СЃРѕС‚Р° РёСЃРєРѕРјРѕР№ РјР°С‚СЂРёС†С‹, n - РґР»РёРЅР° РѕР±РµРёС… РјР°С‚СЂРёС†
 		const int block_size = n, num_of_blocks = (m + n - 1)/n;
 
 	#pragma omp parallel for
 		for (int it = 0; it < num_of_blocks; ++it) {
-			int block_len = (it + 1 == num_of_blocks) ? ((m % block_size != 0) ? m % block_size : block_size) : block_size; // высота текущего блока
-			const T *u_curr;					   // указатель на текущую строку верхнетреугольной матрицы
-			T *na_ptr = a_ptr + block_size*it*lda, // указатель на начало блока
-			  *a_curr = na_ptr,					   // указатель на текущую строку матрицы в правой части
-			   mult;							   // множитель, на который умножается вычитаемый элемент
+			int block_len = (it + 1 == num_of_blocks) ? ((m % block_size != 0) ? m % block_size : block_size) : block_size; // РІС‹СЃРѕС‚Р° С‚РµРєСѓС‰РµРіРѕ Р±Р»РѕРєР°
+			const T *u_curr;					   // СѓРєР°Р·Р°С‚РµР»СЊ РЅР° С‚РµРєСѓС‰СѓСЋ СЃС‚СЂРѕРєСѓ РІРµСЂС…РЅРµС‚СЂРµСѓРіРѕР»СЊРЅРѕР№ РјР°С‚СЂРёС†С‹
+			T *na_ptr = a_ptr + block_size*it*lda, // СѓРєР°Р·Р°С‚РµР»СЊ РЅР° РЅР°С‡Р°Р»Рѕ Р±Р»РѕРєР°
+			  *a_curr = na_ptr,					   // СѓРєР°Р·Р°С‚РµР»СЊ РЅР° С‚РµРєСѓС‰СѓСЋ СЃС‚СЂРѕРєСѓ РјР°С‚СЂРёС†С‹ РІ РїСЂР°РІРѕР№ С‡Р°СЃС‚Рё
+			   mult;							   // РјРЅРѕР¶РёС‚РµР»СЊ, РЅР° РєРѕС‚РѕСЂС‹Р№ СѓРјРЅРѕР¶Р°РµС‚СЃСЏ РІС‹С‡РёС‚Р°РµРјС‹Р№ СЌР»РµРјРµРЅС‚
 
 			for (int k = 0; k < block_len; ++k, a_curr += lda) {
 				u_curr = u_ptr;
