@@ -9,45 +9,6 @@ using namespace std;
 
 #define MTX_TYPE double
 
-#define TEST
-
-#ifndef TEST
-
-int main() {
-	size_t n;
-	MTX_TYPE *A, *L, *U;
-
-	cin >> n;
-	A = new MTX_TYPE[n*n];
-	L = new MTX_TYPE[n*n];
-	U = new MTX_TYPE[n*n];
-
-	for (size_t i = 0; i < n; ++i)
-		for (size_t j = 0; j < n; ++j)
-			cin >> A[i*n+j];
-
-	LU(A, L, U, n);
-	
-	cout.precision(6);
-	for (size_t i = 0; i < n; ++i) {
-		for (size_t j = 0; j < n; ++j)
-			cout << fixed << L[i*n+j] << " ";
-		cout << '\n';
-	}
-	cout << '\n';
-	for (size_t i = 0; i < n; ++i) {
-		for (size_t j = 0; j < n; ++j)
-			cout <<	fixed << U[i*n+j] << " ";
-		cout << '\n';
-	}
-	cout << '\n';
-
-	delete[] A; 
-	delete[] L; 
-	delete[] U;
-}
-#endif
-
 int main() {
 	size_t max_size, min_size;
 	// MULTIPLICATION TESTS
@@ -60,7 +21,7 @@ int main() {
 	// DEFINITE SIZES
 	max_size = 4096; min_size = 2048;
 	for (size_t size = 2048, i = 1; size < max_size; size += 64, ++i) {
-		Matrix<double> m1(size, size), m2(size, size), prod1(size, size), cm1, cm2, prod2;
+		Matrix<MTX_TYPE> m1(size, size), m2(size, size), prod1(size, size), cm1, cm2, prod2;
 		m1.generate_random_matrix(); cm1 = m1;
 		m2.generate_random_matrix(); cm2 = m2;
 
@@ -71,7 +32,7 @@ int main() {
 
 		prod2 = cm1 * cm2;
 
-		double ae = 0.0, re = 0.0;
+		MTX_TYPE ae = 0.0, re = 0.0;
 		for (int i = 0; i < size; ++i) {
 			for (int j = 0; j < size; ++j) {
 				ae = std::max(ae, abs(prod2(i, j) - prod1(i, j)));
@@ -87,12 +48,12 @@ int main() {
 	// DEFINITE SIZES
 	max_size = 4096; min_size = 2048;
 	for (size_t size = 2048, i = 1; size < max_size; size += 64, ++i) {
-		Matrix<double> m1(size, size), m2(size, size);
+		Matrix<MTX_TYPE> m1(size, size), m2(size, size);
 		m1.generate_random_matrix();
 		m2.generate_random_matrix();
 
 		auto start_time = chrono::steady_clock::now();
-		Matrix<double> product = m1 * m2;
+		Matrix<MTX_TYPE> product = m1 * m2;
 		auto end_time = chrono::steady_clock::now();
 		auto dur = chrono::duration_cast<chrono::milliseconds>(end_time - start_time);
 
@@ -105,12 +66,12 @@ int main() {
 		size_t m = rand() % (max_size - min_size + 1) + min_size, 
 			n = rand() % (max_size - min_size + 1) + min_size, 
 			p = rand() % (max_size - min_size + 1) + min_size;
-		Matrix<double> m1(m,n), m2(n,p);
+		Matrix<MTX_TYPE> m1(m,n), m2(n,p);
 		m1.generate_random_matrix();
 		m2.generate_random_matrix();
 
 		auto start_time = chrono::steady_clock::now();
-		Matrix<double> product = m1 * m2;
+		Matrix<MTX_TYPE> product = m1 * m2;
 		auto end_time = chrono::steady_clock::now();
 		auto dur = chrono::duration_cast<chrono::milliseconds>(end_time - start_time);
 
@@ -131,43 +92,45 @@ int main() {
 
 	sequential_max_time = 0;
 	parallel_max_time = 0;
-	max_size = 5000, min_size = 5000;
-	for (size_t i = 0; i < 50; ++i) {
-		int n = rand() % (max_size - min_size + 1) + min_size, info;
-		Matrix<double> A(n,n);
-		A.generate_random_matrix();
-		//A.print();
+	//omp_set_num_threads(6);
+	//for (int size = 1000; size <= 8000; size += 1000) {
+		max_size = 6000, min_size = 6000;
+		for (size_t i = 0; i < 30; ++i) {
+			int n = rand() % (max_size - min_size + 1) + min_size;
+			Matrix<MTX_TYPE> A(n, n);
+			A.generate_random_matrix();
 
-		auto start_time = chrono::steady_clock::now();
-		A.LU3_block();
-		auto end_time = chrono::steady_clock::now();
-		auto dur = chrono::duration_cast<chrono::milliseconds>(end_time - start_time);
-		parallel_max_time = std::max(parallel_max_time, dur.count());
+			auto start_time = chrono::steady_clock::now();
+			//mkl_dgetrfnp(&n, &n, &A(0,0), &n, &info);
+			A.LU3_block();
+			auto end_time = chrono::steady_clock::now();
+			auto dur = chrono::duration_cast<chrono::milliseconds>(end_time - start_time);
+			parallel_max_time = std::max(parallel_max_time, dur.count());
 
-		//mkl_dgetrfnp(&n, &n, &B(0,0), &n, &info);
-		//B.print();
-		/*
-		for (int i = 0; i < n; ++i)
-			L(i,i) = 1.0;
-		for (int i = 1; i < n; ++i)
-			for (int j = 0; j < i; ++j) {
-				L(i, j) = A(i, j);
-				A(i,j) = 0.0;
-			}
-		for (int i = 0; i < n; ++i)
-			for (int j = i+1; j < n; ++j)
-				L(i,j) = 0.0;
-		P = L*A;
+			//B.print();
+			/*
+			for (int i = 0; i < n; ++i)
+				L(i,i) = 1.0;
+			for (int i = 1; i < n; ++i)
+				for (int j = 0; j < i; ++j) {
+					L(i, j) = A(i, j);
+					A(i,j) = 0.0;
+				}
+			for (int i = 0; i < n; ++i)
+				for (int j = i+1; j < n; ++j)
+					L(i,j) = 0.0;
+			U = L*A;
 
-		double ae = 0.0, re = 0.0;
-		for (int i = 0; i < n; ++i) {
-			for (int j = 0; j < n; ++j) {
-				ae = std::max(ae, abs(P(i, j) - B(i, j)));
-				re = std::max(re, (B(i,j) == 0.0) ? 0.0 : abs(P(i,j)/B(i,j) - 1.0));
-			}
-		}
-		*/
-		std::cout << "Random, random sizes " << i+1 << " : size - (" << n << "), time - " << dur.count() << "ms\n";
+			MTX_TYPE ae = 0.0, re = 0.0;
+			for (int i = 0; i < n; ++i) {
+				for (int j = 0; j < n; ++j) {
+					ae = std::max(ae, abs(U(i, j) - B(i, j)));
+					re = std::max(re, (B(i,j) == 0.0) ? 0.0 : abs(U(i,j)/B(i,j) - 1.0));
+				}
+			}*/
+
+			std::cout << "Random, random sizes " << i+1 << " : size - (" << n << "), time - " << dur.count() << "ms\n";
+		//}
 	}
 	std::cout << "Max time: " << parallel_max_time << "ms\n\n";
 
@@ -181,19 +144,19 @@ int main() {
 
 	for (size_t i = 0; i < num_of_tests; ++i) {
 		int n = rand() % (max_size - min_size + 1) + min_size;
-		Matrix<double> A(n,n);
+		Matrix<MTX_TYPE> A(n,n);
 		A.generate_random_matrix();
 		//A.print();
 
 		auto start_time = chrono::steady_clock::now();
-		mkl_dgetrfnp(&n, &n, &A(0,0), &n, &info);
+		//mkl_dgetrfnp(&n, &n, &A(0,0), &n, &info);
 		auto end_time = chrono::steady_clock::now();
 		auto dur = chrono::duration_cast<chrono::milliseconds>(end_time - start_time);
 		parallel_max_time = std::max(parallel_max_time, dur.count());
 		sum_time += dur.count();
 		std::cout << "Random, random sizes " << i+1 << " : size - (" << n << "), time -" << dur.count() << "ms\n";
 	}
-	std::cout << "Max time: " << parallel_max_time << "ms, avg time - " << (double)sum_time/num_of_tests << "\n\n";
+	std::cout << "Max time: " << parallel_max_time << "ms, avg time - " << (MTX_TYPE)sum_time/num_of_tests << "\n\n";
 
 	
 	/*
@@ -207,7 +170,7 @@ int main() {
 	std::cout << "Sequential: \n";
 	for (size_t i = 0; i < num_of_tests; ++i) {
 		size_t n = rand() % (max_size - min_size + 1) + min_size;
-		Matrix<double> A(n,n), U(n,n);
+		Matrix<MTX_TYPE> A(n,n), U(n,n);
 		A.generate_random_matrix();
 		//A.print();
 
@@ -225,7 +188,7 @@ int main() {
 	std::cout << "Parallel: \n";
 	for (size_t i = 0; i < num_of_tests; ++i) {
 		size_t n = rand() % (max_size - min_size + 1) + min_size;
-		Matrix<double> A(n, n), U(n, n);
+		Matrix<MTX_TYPE> A(n, n), U(n, n);
 		A.generate_random_matrix();
 		//A.print();
 
@@ -249,7 +212,7 @@ int main() {
 	parallel_max_time = 0;
 	max_size = 2048;
 	for (size_t n = 2, i = 1; n <= max_size; n += 2, ++i) {
-		Matrix<double> A(n,n), L(n,n), U(n,n);
+		Matrix<MTX_TYPE> A(n,n), L(n,n), U(n,n);
 		A.generate_random_matrix();
 		//A.print();
 
@@ -258,11 +221,11 @@ int main() {
 		auto end_time = chrono::steady_clock::now();
 		auto dur = chrono::duration_cast<chrono::milliseconds>(end_time - start_time);
 		sequential_max_time = std::max(sequential_max_time, dur.count());
-		Matrix<double> C = L*U;
+		Matrix<MTX_TYPE> C = L*U;
 		//L.print();
 		//U.print();
 		//C.print();
-		double ae = 0.0, re = 0.0;
+		MTX_TYPE ae = 0.0, re = 0.0;
 		for (int i = 0; i < n; ++i) {
 			for (int j = 0; j < n; ++j) {
 				ae = std::max(ae, abs(C(i, j) - A(i, j)));
@@ -286,7 +249,7 @@ int main() {
 	max_size = 500, min_size = 500;
 	for (size_t i = 0; i < 1; ++i) {
 		size_t n = rand() % (max_size - min_size + 1) + min_size;
-		Matrix<double> A(n,n), L(n,n), U(n,n);
+		Matrix<MTX_TYPE> A(n,n), L(n,n), U(n,n);
 		A.generate_well_conditioned_matrix(3000.0);
 		//A.print();
 
@@ -295,10 +258,10 @@ int main() {
 		auto end_time = chrono::steady_clock::now();
 		auto dur = chrono::duration_cast<chrono::milliseconds>(end_time - start_time);
 		sequential_max_time = std::max(sequential_max_time, dur.count());
-		Matrix<double> C = L*U;
+		Matrix<MTX_TYPE> C = L*U;
 
 		//C.print();
-		double ae = 0.0, re = 0.0;
+		MTX_TYPE ae = 0.0, re = 0.0;
 		//for (int i = 0; i < n; ++i) {
 		//	for (int j = 0; j < n; ++j) {
 		//		std::cout << std::fixed << A(i, j) << " ";
@@ -331,7 +294,7 @@ int main() {
 	max_size = 2048, min_size = 2047;
 	for (size_t i = 0; i < 50; ++i) {
 		size_t n = rand() % (max_size - min_size) + min_size;
-		Matrix<double> A(n,n), L(n,n), U(n,n);
+		Matrix<MTX_TYPE> A(n,n), L(n,n), U(n,n);
 		A.generate_random_matrix();
 		//A.print();
 
@@ -340,9 +303,9 @@ int main() {
 		auto end_time = chrono::steady_clock::now();
 		auto dur = chrono::duration_cast<chrono::milliseconds>(end_time - start_time);
 		sequential_max_time = std::max(sequential_max_time, dur.count());
-		Matrix<double> C = L*U;
+		Matrix<MTX_TYPE> C = L*U;
 		//C.print();
-		double ae = 0.0, re = 0.0;
+		MTX_TYPE ae = 0.0, re = 0.0;
 		for (int i = 0; i < n; ++i)
 			for (int j = 0; j < n; ++j) {
 				ae = std::max(ae, abs(C(i,j) - A(i,j)));

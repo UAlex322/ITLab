@@ -1,6 +1,5 @@
 #include <iostream>
 #include <omp.h>
-#define eps 1e-17
 
 template <typename T>
 class Matrix {
@@ -189,7 +188,7 @@ public:
 			LSolve(dptr, dptr + bs, n, bs, n - nbi);
 			USolve(dptr, dptr + bs*n, n, n - nbi, bs);
 
-			FMMS(dptr + bs*n, dptr + bs, dptr + bs*(n + 1), n, n, n, n - nbi, bs, n - nbi);
+			FMMS1(dptr + bs*n, dptr + bs, dptr + bs*(n + 1), n, n, n, n - nbi, bs, n - nbi, bs);
 		}
 		LU(dptr, n, n-bi);
 	}
@@ -202,7 +201,8 @@ private:
 
 	#pragma omp parallel for
 		for (int i = 0; i < m; ++i) {
-			T a_elem, *c_curr = c_ptr + i*ldc, *b_curr = b_ptr;
+			T a_elem, *c_curr = c_ptr + i*ldc;
+			const T *b_curr = b_ptr;
 
 			for (int k = 0; k < n; ++k, b_curr += ldb) {
 				a_elem = a_ptr[i*lda + k];
@@ -224,10 +224,44 @@ private:
 			 *c_curr = c_ptr + i*ldc; 
 
 			for (int k = 0; k < n; ++k, b_curr += ldb) {
-				a_elem = a_ptr[i*lda + k];
+				a_elem = -a_ptr[i*lda + k];
 
 				for (int j = 0; j < p; ++j)
-					c_curr[j] -= a_elem * b_curr[j];
+					c_curr[j] += a_elem * b_curr[j];
+			}
+		}
+	}
+
+	void FMMS1(const T *a_ptr, const T *b_ptr, T *c_ptr, const int lda, const int ldb, const int ldc, const int m, const int n, const int p, const int bs) {
+		const int num_of_blocks = (m+bs-1)/bs;
+		int *pos = new int[num_of_blocks+1];
+		for (int i = 0; i < num_of_blocks; ++i)
+			pos[i] = i*bs;
+		pos[num_of_blocks] = m;
+
+	#pragma omp parallel for
+		for (int ib = 0; ib < num_of_blocks; ++ib) {
+			for (int jb = 0; jb < num_of_blocks; ++jb) {
+		//for (int it = 0; it < num_of_blocks*num_of_blocks; ++it) {
+				const int //ib = it/num_of_blocks,
+						//jb = it % num_of_blocks,
+						ba_len = pos[ib+1]-pos[ib],
+						bb_len = pos[jb+1]-pos[jb];
+				const T *na_ptr = a_ptr + pos[ib]*lda,
+						*nb_ptr = b_ptr + pos[jb];
+				T		*nc_ptr = c_ptr + pos[ib]*ldc + pos[jb],
+						a_elem;
+
+				for (int i = 0; i < ba_len; ++i, nc_ptr += ldc, na_ptr += lda) {
+					const T *b_curr = nb_ptr;
+
+					for (int k = 0; k < bs; ++k, b_curr += ldb) {
+						a_elem = na_ptr[k];
+
+						for (int j = 0; j < bb_len; ++j)
+							nc_ptr[j] -= a_elem * b_curr[j];
+					}
+				}
 			}
 		}
 	}
@@ -245,7 +279,7 @@ private:
 				mult = ptr2[j]/ptr1[j];
 				ptr2[j] = mult;
 
-			#pragma omp parallel for
+			//#pragma omp parallel for
 				for (int k = j + 1; k < n; ++k) {
 					ptr2[k] -= mult*ptr1[k];
 				}
@@ -270,10 +304,10 @@ private:
 				ptr2 = ptr1 + lda;
 
 				for (int i = j + 1; i < block_size; ++i, ptr2 += lda) {
-					mult = l_ptr[i*lda + j];
+					mult = -l_ptr[i*lda + j];
 
 					for (int k = 0; k < block_len; ++k) {
-						ptr2[k] -= mult*ptr1[k];
+						ptr2[k] += mult*ptr1[k];
 					}
 				}
 			}
