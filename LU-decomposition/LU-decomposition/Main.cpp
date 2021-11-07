@@ -3,7 +3,7 @@
 #include <cstdlib>
 #include <ctime>
 #include <chrono>
-#include <mkl.h>
+//#include <mkl.h>
 #include "Matrix.h"
 using namespace std;
 
@@ -92,12 +92,11 @@ int main() {
 
 	sequential_max_time = 0;
 	parallel_max_time = 0;
-	//omp_set_num_threads(6);
-	//for (int size = 1000; size <= 8000; size += 1000) {
-		max_size = 6000, min_size = 6000;
-		for (size_t i = 0; i < 30; ++i) {
-			int n = rand() % (max_size - min_size + 1) + min_size;
-			Matrix<MTX_TYPE> A(n, n);
+	for (int size = 1000; size <= 8000; size += 1000) {
+		//max_size = 8000, min_size = 8000;
+		for (size_t i = 0; i < 10; ++i) {
+			int n = size, info; //rand() % (max_size - min_size + 1) + min_size;
+			Matrix<MTX_TYPE> A(n,n);
 			A.generate_random_matrix();
 
 			auto start_time = chrono::steady_clock::now();
@@ -108,8 +107,8 @@ int main() {
 			parallel_max_time = std::max(parallel_max_time, dur.count());
 
 			//B.print();
-			/*
-			for (int i = 0; i < n; ++i)
+			
+			/*for (int i = 0; i < n; ++i)
 				L(i,i) = 1.0;
 			for (int i = 1; i < n; ++i)
 				for (int j = 0; j < i; ++j) {
@@ -130,10 +129,10 @@ int main() {
 			}*/
 
 			std::cout << "Random, random sizes " << i+1 << " : size - (" << n << "), time - " << dur.count() << "ms\n";
-		//}
+		}
 	}
 	std::cout << "Max time: " << parallel_max_time << "ms\n\n";
-
+	/*
 	// MKL LU TESTS
 	std::cout << "MKL LU TESTS\n";
 	sequential_max_time = 0;
@@ -149,7 +148,7 @@ int main() {
 		//A.print();
 
 		auto start_time = chrono::steady_clock::now();
-		//mkl_dgetrfnp(&n, &n, &A(0,0), &n, &info);
+		mkl_dgetrfnp(&n, &n, &A(0,0), &n, &info);
 		auto end_time = chrono::steady_clock::now();
 		auto dur = chrono::duration_cast<chrono::milliseconds>(end_time - start_time);
 		parallel_max_time = std::max(parallel_max_time, dur.count());
@@ -157,7 +156,7 @@ int main() {
 		std::cout << "Random, random sizes " << i+1 << " : size - (" << n << "), time -" << dur.count() << "ms\n";
 	}
 	std::cout << "Max time: " << parallel_max_time << "ms, avg time - " << (MTX_TYPE)sum_time/num_of_tests << "\n\n";
-
+	*/
 	
 	/*
 

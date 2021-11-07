@@ -1,12 +1,11 @@
 #include <iostream>
 #include <omp.h>
-
 template <typename T>
 class Matrix {
 public:
 
 	Matrix(int rows = 0, int cols = 0): m(rows), n(cols) {
-		data = new T[rows*cols];
+		data = new T[m*n];
 	}
 
 	Matrix(const Matrix &mtx): m(mtx.m), n(mtx.n) {
@@ -109,33 +108,7 @@ public:
 		return c;
 	}
 
-	void LU1(Matrix &L, Matrix &U) {
-		U = *this;
-		T *l_ptr = L.data, *u_ptr = U.data, *ptr1, *ptr2;
 
-		for (int i = 0; i < n; ++i) {
-			l_ptr[i*(n+1)] = 1.0;
-		}
-		for (int i = 0; i < n; ++i)
-			for (int j = i+1; j < n; ++j)
-				l_ptr[i*n + j] = 0.0;
-
-		T mult;
-		for (int j = 0; j < n-1; ++j) {
-			ptr1 = u_ptr + j*n;
-
-			for (int i = j+1; i < n; ++i) {
-				ptr2 = u_ptr + i*n;
-				mult = ptr2[j]/ptr1[j];
-				l_ptr[i*n + j] = mult;
-				
-			//#pragma omp parallel for
-				for (int k = j; k < n; ++k) {
-					ptr2[k] -= mult*ptr1[k];
-				}
-			}
-		}
-	}
 
 	// Обычный алгоритм (последовательная версия)
 	void LU2_sequential() {
@@ -179,8 +152,10 @@ public:
 	// Блочный алгоритм (параллельная версия)
 	void LU3_block() {
 		T *dptr = data;
-		const int bs = 100;	  // размер блока
+		constexpr int bs = 192;	  // размер блока
 		int bi = 0, nbi = bs; // индексы начала текущего и следующего блоков
+
+		T *buffer = new T[bs*bs*omp_get_max_threads()]; // буфер для блоков матрицы B в матричном умножении
 
 		for (; nbi < n; dptr += bs*(n+1), bi += bs, nbi += bs) {
 			LU(dptr, n, bs);
@@ -188,9 +163,11 @@ public:
 			LSolve(dptr, dptr + bs, n, bs, n - nbi);
 			USolve(dptr, dptr + bs*n, n, n - nbi, bs);
 
-			FMMS1(dptr + bs*n, dptr + bs, dptr + bs*(n + 1), n, n, n, n - nbi, bs, n - nbi, bs);
+			FMMS2(dptr + bs*n, dptr + bs, dptr + bs*(n + 1), buffer, n, n, n, n - nbi, bs, n - nbi, bs);
 		}
 		LU(dptr, n, n-bi);
+
+		delete[] buffer;
 	}
 
 private:
@@ -213,26 +190,8 @@ private:
 		}
 	}
 
-	// "Fused Matrix Multiply - Subtract" - "C = C - A*B"
-	// Занимает >90% общего времени работы
-	void FMMS(const T *a_ptr, const T *b_ptr, T *c_ptr, const int lda, const int ldb, const int ldc, const int m, const int n, const int p) {
-
-	#pragma omp parallel for
-		for (int i = 0; i < m; ++i) {
-			const T *b_curr = b_ptr;
-			T a_elem,
-			 *c_curr = c_ptr + i*ldc; 
-
-			for (int k = 0; k < n; ++k, b_curr += ldb) {
-				a_elem = -a_ptr[i*lda + k];
-
-				for (int j = 0; j < p; ++j)
-					c_curr[j] += a_elem * b_curr[j];
-			}
-		}
-	}
-
-	void FMMS1(const T *a_ptr, const T *b_ptr, T *c_ptr, const int lda, const int ldb, const int ldc, const int m, const int n, const int p, const int bs) {
+	// Оптимизированная версия FMMS с транспонированием блоков
+	void FMMS2(const T *a_ptr, const T *b_ptr, T *c_ptr, T *buffer, const int lda, const int ldb, const int ldc, const int m, const int n, const int p, const int bs) {
 		const int num_of_blocks = (m+bs-1)/bs;
 		int *pos = new int[num_of_blocks+1];
 		for (int i = 0; i < num_of_blocks; ++i)
@@ -240,17 +199,51 @@ private:
 		pos[num_of_blocks] = m;
 
 	#pragma omp parallel for
+		for (int jb = 0; jb < num_of_blocks; ++jb) {
+			const int bb_len = pos[jb+1]-pos[jb];
+			const T *nb_ptr = b_ptr + pos[jb],
+					*a_curr = a_ptr,
+					*b_curr;
+				  T *c_curr = c_ptr + pos[jb],
+					*nbt_ptr = buffer + bs*bs*omp_get_thread_num(),
+					 sum;
+
+			for (int i = 0; i < bs; ++i)
+				for (int j = 0; j < bb_len; ++j)
+					nbt_ptr[j*bs + i] = nb_ptr[i*ldb + j];
+
+			for (int i = 0; i < m; ++i, a_curr += lda, c_curr += ldc) {
+				b_curr = nbt_ptr;
+				for (int j = 0; j < bb_len; ++j, b_curr += bs) {
+					sum = 0.0;
+					for (int k = 0; k < bs; ++k)
+						sum += a_curr[k] * b_curr[k];
+					c_curr[j] -= sum;
+				}
+			}
+		}
+	}
+
+	// Без транспонирования
+	void FMMS1(const T *a_ptr, const T *b_ptr, T *c_ptr, const int lda, const int ldb, const int ldc, const int m, const int n, const int p, const int bs) {
+		const int num_of_blocks = (m+bs-1)/bs;
+		int *pos = new int[num_of_blocks+1];
+		for (int i = 0; i < num_of_blocks; ++i)
+			pos[i] = i*bs;
+		pos[num_of_blocks] = m;
+ 
+		#pragma omp parallel for
 		for (int ib = 0; ib < num_of_blocks; ++ib) {
 			for (int jb = 0; jb < num_of_blocks; ++jb) {
-		//for (int it = 0; it < num_of_blocks*num_of_blocks; ++it) {
+				//for (int it = 0; it < num_of_blocks*num_of_blocks; ++it) {
 				const int //ib = it/num_of_blocks,
-						//jb = it % num_of_blocks,
-						ba_len = pos[ib+1]-pos[ib],
-						bb_len = pos[jb+1]-pos[jb];
+						  //jb = it % num_of_blocks,
+					ba_len = pos[ib+1]-pos[ib],
+					bb_len = pos[jb+1]-pos[jb];
 				const T *na_ptr = a_ptr + pos[ib]*lda,
-						*nb_ptr = b_ptr + pos[jb];
+					*nb_ptr = b_ptr + pos[jb];
 				T		*nc_ptr = c_ptr + pos[ib]*ldc + pos[jb],
-						a_elem;
+					a_elem;
 
 				for (int i = 0; i < ba_len; ++i, nc_ptr += ldc, na_ptr += lda) {
 					const T *b_curr = nb_ptr;
@@ -348,5 +341,5 @@ private:
 	
 	// 
 	T* data;
-	int m, n; // Number of rows and columns
+	int m, n; // Число строк и столбцов
 };

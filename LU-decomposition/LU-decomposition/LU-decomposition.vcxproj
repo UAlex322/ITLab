@@ -49,10 +49,12 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>Intel C++ Compiler 2021</PlatformToolset>
+    <PlatformToolset>Intel C++ Compiler 19.2</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
     <UseInteloneMKL>Parallel</UseInteloneMKL>
+    <UseILP64Interfaces1A>false</UseILP64Interfaces1A>
+    <UseInteloneTBB>false</UseInteloneTBB>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
@@ -137,6 +139,17 @@
       <OpenMPSupport>true</OpenMPSupport>
       <LanguageStandard>stdcpp14</LanguageStandard>
       <OpenMP>GenerateParallelCode</OpenMP>
+      <FSYCLEarlyOptimizations>Yes</FSYCLEarlyOptimizations>
+      <Parallelization>true</Parallelization>
+      <UseIntelOptimizedHeaders>true</UseIntelOptimizedHeaders>
+      <LoopUnrolling>4</LoopUnrolling>
+      <MultiProcessorCompilation>false</MultiProcessorCompilation>
+      <OptimizeForWindowsApplication>false</OptimizeForWindowsApplication>
+      <EnableFiberSafeOptimizations>true</EnableFiberSafeOptimizations>
+      <CCppSupport>Cpp14Support</CCppSupport>
+      <OptimizationDiagnosticLevel>Disable</OptimizationDiagnosticLevel>
+      <Optimization>MaxSpeedHighLevel</Optimization>
+      <AdditionalOptions>/arch:AVX2</AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
