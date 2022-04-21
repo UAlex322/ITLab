@@ -114,7 +114,7 @@ public:
 
 
 
-	// Обычный алгоритм (последовательная версия)
+	// РћР±С‹С‡РЅС‹Р№ Р°Р»РіРѕСЂРёС‚Рј (РїРѕСЃР»РµРґРѕРІР°С‚РµР»СЊРЅР°СЏ РІРµСЂСЃРёСЏ)
 	void lu_trivial_sequential() {
 		float *ptr1 = data, *ptr2;
 		float mult;
@@ -133,7 +133,7 @@ public:
 		}
 	}
 
-	// Обычный алгоритм (параллельная версия)
+	// РћР±С‹С‡РЅС‹Р№ Р°Р»РіРѕСЂРёС‚Рј (РїР°СЂР°Р»Р»РµР»СЊРЅР°СЏ РІРµСЂСЃРёСЏ)
 	void lu_trivial_parallel_omp() {
 		float *ptr1 = data, *ptr2;
 		float mult;
@@ -153,13 +153,13 @@ public:
 		}
 	}
 
-	// Блочный алгоритм (параллельная версия)
+	// Р‘Р»РѕС‡РЅС‹Р№ Р°Р»РіРѕСЂРёС‚Рј (РїР°СЂР°Р»Р»РµР»СЊРЅР°СЏ РІРµСЂСЃРёСЏ)
 	void lu_block_parallel_dpc(const int ls, const int mbs) {
 		float *dptr = data;
-		const int bs = ls;		// размер блока
-		int bi = 0, nbi = bs;	// индексы начала текущего и следующего блоков
+		const int bs = ls;		// СЂР°Р·РјРµСЂ Р±Р»РѕРєР°
+		int bi = 0, nbi = bs;	// РёРЅРґРµРєСЃС‹ РЅР°С‡Р°Р»Р° С‚РµРєСѓС‰РµРіРѕ Рё СЃР»РµРґСѓСЋС‰РµРіРѕ Р±Р»РѕРєРѕРІ
 
-		//float *buffer = new float[bs*n]; // буфер для блоков матрицы B в матричном умножении
+		//float *buffer = new float[bs*n]; // Р±СѓС„РµСЂ РґР»СЏ Р±Р»РѕРєРѕРІ РјР°С‚СЂРёС†С‹ B РІ РјР°С‚СЂРёС‡РЅРѕРј СѓРјРЅРѕР¶РµРЅРёРё
 
 		for (; nbi < n; dptr += bs*(n+1), bi += bs, nbi += bs) {
 			LU(dptr, n, bs);
@@ -182,7 +182,7 @@ public:
 	}
 
 private:
-	// Общий алгоритм умножения матриц 
+	// РћР±С‰РёР№ Р°Р»РіРѕСЂРёС‚Рј СѓРјРЅРѕР¶РµРЅРёСЏ РјР°С‚СЂРёС† 
 	void Mult(const float* a_ptr, const float* b_ptr, float *c_ptr, const int lda, const int ldb, const int ldc, const int m, const int n, const int p) {
 		//int bp, cp;
 
@@ -204,8 +204,8 @@ private:
 		//std::cout << "Call FMMS" << std::endl;
 
 		{
-			buffer<float,1> buf1(a_ptr, range<1>{size*lda-lda+size}); // буфер для матриц A и C
-			buffer<float,1> buf2(b_ptr, range<1>{bs*lda-lda+bs}); // буфер для B
+			buffer<float,1> buf1(a_ptr, range<1>{size*lda-lda+size}); // Р±СѓС„РµСЂ РґР»СЏ РјР°С‚СЂРёС† A Рё C
+			buffer<float,1> buf2(b_ptr, range<1>{bs*lda-lda+bs}); // Р±СѓС„РµСЂ РґР»СЏ B
 
 			
 			sycl::event event = q.submit([&](handler& cgh) {
@@ -220,12 +220,12 @@ private:
 					float* block_a = buffer.get_pointer();
 					float* block_b = block_a + bs*bs;
 
-					size_t li = item.get_local_id(0);			//локальный индекс в группе (строка)
+					size_t li = item.get_local_id(0);			//Р»РѕРєР°Р»СЊРЅС‹Р№ РёРЅРґРµРєСЃ РІ РіСЂСѓРїРїРµ (СЃС‚СЂРѕРєР°)
 					//size_t shift = li*bs;
 					size_t lj = item.get_local_id(1);
 					uint32_t gi = item.get_global_id(0);
 					uint32_t gj = item.get_global_id(1);
-					//uint32_t gi = bs*item.get_group(0) + li;	//начало номера группы по строке 
+					//uint32_t gi = bs*item.get_group(0) + li;	//РЅР°С‡Р°Р»Рѕ РЅРѕРјРµСЂР° РіСЂСѓРїРїС‹ РїРѕ СЃС‚СЂРѕРєРµ 
 					//uint32_t gj = bs*item.get_group(1) + lj;
 
 					block_a[li*bs + lj] = a[gi*lda + lj];
@@ -245,8 +245,8 @@ private:
 			
 			/*
 			q.submit([&](handler &cgh) {
-				auto a_acc = buf1.get_access<sycl::access::mode::read>(cgh); // Матрица А
-				auto b_acc = buf2.get_access<sycl::access::mode::read>(cgh); // Матрица B
+				auto a_acc = buf1.get_access<sycl::access::mode::read>(cgh); // РњР°С‚СЂРёС†Р° Рђ
+				auto b_acc = buf2.get_access<sycl::access::mode::read>(cgh); // РњР°С‚СЂРёС†Р° B
 				auto c_acc = buf1.get_access<sycl::access::mode::write>(cgh);
 				accessor<float, 1, access::mode::read_write, access::target::local> block_a_acc(mbs*bs, cgh);
 
@@ -269,9 +269,9 @@ private:
 
 			/*
 			q.submit([&](handler &cgh) {
-				auto a_acc = buf1.get_access<sycl::access::mode::read_write>(cgh); // Матрицы А и С
-				auto b_acc = buf2.get_access<sycl::access::mode::read>(cgh); // Матрица B
-				accessor<float, 1, access::mode::read_write, access::target::local> block_a_acc(mbs*bs, cgh); // Матрица A
+				auto a_acc = buf1.get_access<sycl::access::mode::read_write>(cgh); // РњР°С‚СЂРёС†С‹ Рђ Рё РЎ
+				auto b_acc = buf2.get_access<sycl::access::mode::read>(cgh); // РњР°С‚СЂРёС†Р° B
+				accessor<float, 1, access::mode::read_write, access::target::local> block_a_acc(mbs*bs, cgh); // РњР°С‚СЂРёС†Р° A
 
 				cgh.parallel_for<class Mult>(nd_range<1>(range<1>(size), range<1>(mbs)), [=](nd_item<1> item) {
 					int a_old_shift = item.get_global_id(0)*lda,
@@ -341,11 +341,11 @@ private:
 		//std::cout << "End of FMMS" << std::endl;
 	}
 
-	// Общее LU-разложение (применяется для блока в матрице)
+	// РћР±С‰РµРµ LU-СЂР°Р·Р»РѕР¶РµРЅРёРµ (РїСЂРёРјРµРЅСЏРµС‚СЃСЏ РґР»СЏ Р±Р»РѕРєР° РІ РјР°С‚СЂРёС†Рµ)
 	void LU(float *a_ptr, const int lda, const int n) {
-		float *ptr1 = a_ptr, // указатель на текущую вычитаемую строку 
-			  *ptr2,		 // указатель на текущую уменьшаемую строку
-			   mult;		 // множитель, на который умножается вычитаемая строка
+		float *ptr1 = a_ptr, // СѓРєР°Р·Р°С‚РµР»СЊ РЅР° С‚РµРєСѓС‰СѓСЋ РІС‹С‡РёС‚Р°РµРјСѓСЋ СЃС‚СЂРѕРєСѓ 
+			  *ptr2,		 // СѓРєР°Р·Р°С‚РµР»СЊ РЅР° С‚РµРєСѓС‰СѓСЋ СѓРјРµРЅСЊС€Р°РµРјСѓСЋ СЃС‚СЂРѕРєСѓ
+			   mult;		 // РјРЅРѕР¶РёС‚РµР»СЊ, РЅР° РєРѕС‚РѕСЂС‹Р№ СѓРјРЅРѕР¶Р°РµС‚СЃСЏ РІС‹С‡РёС‚Р°РµРјР°СЏ СЃС‚СЂРѕРєР°
 
 		for (int j = 0; j < n-1; ++j, ptr1 += lda) {
 			ptr2 = ptr1 + lda;
@@ -362,18 +362,18 @@ private:
 		}
 	}
 
-	// Решение системы LX = B; L - верхнетреугольная матрица, X,B - подходящие прямоугольные матрицы (одинакового размера)
+	// Р РµС€РµРЅРёРµ СЃРёСЃС‚РµРјС‹ LX = B; L - РІРµСЂС…РЅРµС‚СЂРµСѓРіРѕР»СЊРЅР°СЏ РјР°С‚СЂРёС†Р°, X,B - РїРѕРґС…РѕРґСЏС‰РёРµ РїСЂСЏРјРѕСѓРіРѕР»СЊРЅС‹Рµ РјР°С‚СЂРёС†С‹ (РѕРґРёРЅР°РєРѕРІРѕРіРѕ СЂР°Р·РјРµСЂР°)
 	void LSolve(const float *l_ptr, float *a_ptr, const int lda, const int m, const int n) {
-		// m - высота обеих матриц, n - длина искомой матрицы
+		// m - РІС‹СЃРѕС‚Р° РѕР±РµРёС… РјР°С‚СЂРёС†, n - РґР»РёРЅР° РёСЃРєРѕРјРѕР№ РјР°С‚СЂРёС†С‹
 		const int block_size = m, num_of_blocks = (n+m-1)/m;
 
 	#pragma omp parallel for
 		for (int it = 0; it < num_of_blocks; ++it) {
-			int block_len = (it+1 == num_of_blocks) ? ((n % block_size != 0) ? n % block_size : block_size) : block_size; // длина текущего блока
-			float *na_ptr = a_ptr + block_size*it, // указатель на начало текущего блока
-				  *ptr1 = na_ptr,				   // указатель на текущую вычитаемую строку
-				  *ptr2,						   // указатель на текущую уменьшаемую строку
-				   mult;						   // множитель, на который умножается вычитаемая строка
+			int block_len = (it+1 == num_of_blocks) ? ((n % block_size != 0) ? n % block_size : block_size) : block_size; // РґР»РёРЅР° С‚РµРєСѓС‰РµРіРѕ Р±Р»РѕРєР°
+			float *na_ptr = a_ptr + block_size*it, // СѓРєР°Р·Р°С‚РµР»СЊ РЅР° РЅР°С‡Р°Р»Рѕ С‚РµРєСѓС‰РµРіРѕ Р±Р»РѕРєР°
+				  *ptr1 = na_ptr,				   // СѓРєР°Р·Р°С‚РµР»СЊ РЅР° С‚РµРєСѓС‰СѓСЋ РІС‹С‡РёС‚Р°РµРјСѓСЋ СЃС‚СЂРѕРєСѓ
+				  *ptr2,						   // СѓРєР°Р·Р°С‚РµР»СЊ РЅР° С‚РµРєСѓС‰СѓСЋ СѓРјРµРЅСЊС€Р°РµРјСѓСЋ СЃС‚СЂРѕРєСѓ
+				   mult;						   // РјРЅРѕР¶РёС‚РµР»СЊ, РЅР° РєРѕС‚РѕСЂС‹Р№ СѓРјРЅРѕР¶Р°РµС‚СЃСЏ РІС‹С‡РёС‚Р°РµРјР°СЏ СЃС‚СЂРѕРєР°
 
 			for (int j = 0; j < block_size - 1; ++j, ptr1 += lda) {
 				ptr2 = ptr1 + lda;
@@ -389,18 +389,18 @@ private:
 		}
 	}
 
-	// Решение системы XU = B; U - верхнетреугольная матрица, X,B - подходящие прямоугольные матрицы (одинакового размера)
+	// Р РµС€РµРЅРёРµ СЃРёСЃС‚РµРјС‹ XU = B; U - РІРµСЂС…РЅРµС‚СЂРµСѓРіРѕР»СЊРЅР°СЏ РјР°С‚СЂРёС†Р°, X,B - РїРѕРґС…РѕРґСЏС‰РёРµ РїСЂСЏРјРѕСѓРіРѕР»СЊРЅС‹Рµ РјР°С‚СЂРёС†С‹ (РѕРґРёРЅР°РєРѕРІРѕРіРѕ СЂР°Р·РјРµСЂР°)
 	void USolve(const float *u_ptr, float *a_ptr, const int lda, const int m, const int n) {
-		// m - высота искомой матрицы, n - длина обеих матриц
+		// m - РІС‹СЃРѕС‚Р° РёСЃРєРѕРјРѕР№ РјР°С‚СЂРёС†С‹, n - РґР»РёРЅР° РѕР±РµРёС… РјР°С‚СЂРёС†
 		const int block_size = n, num_of_blocks = (m + n - 1)/n;
 
 	#pragma omp parallel for
 		for (int it = 0; it < num_of_blocks; ++it) {
-			int block_len = (it + 1 == num_of_blocks) ? ((m % block_size != 0) ? m % block_size : block_size) : block_size; // высота текущего блока
-			const float *u_curr;					   // указатель на текущую строку верхнетреугольной матрицы
-			float *na_ptr = a_ptr + block_size*it*lda, // указатель на начало блока
-				*a_curr = na_ptr,					   // указатель на текущую строку матрицы в правой части
-				mult;							   // множитель, на который умножается вычитаемый элемент
+			int block_len = (it + 1 == num_of_blocks) ? ((m % block_size != 0) ? m % block_size : block_size) : block_size; // РІС‹СЃРѕС‚Р° С‚РµРєСѓС‰РµРіРѕ Р±Р»РѕРєР°
+			const float *u_curr;					   // СѓРєР°Р·Р°С‚РµР»СЊ РЅР° С‚РµРєСѓС‰СѓСЋ СЃС‚СЂРѕРєСѓ РІРµСЂС…РЅРµС‚СЂРµСѓРіРѕР»СЊРЅРѕР№ РјР°С‚СЂРёС†С‹
+			float *na_ptr = a_ptr + block_size*it*lda, // СѓРєР°Р·Р°С‚РµР»СЊ РЅР° РЅР°С‡Р°Р»Рѕ Р±Р»РѕРєР°
+				*a_curr = na_ptr,					   // СѓРєР°Р·Р°С‚РµР»СЊ РЅР° С‚РµРєСѓС‰СѓСЋ СЃС‚СЂРѕРєСѓ РјР°С‚СЂРёС†С‹ РІ РїСЂР°РІРѕР№ С‡Р°СЃС‚Рё
+				mult;							   // РјРЅРѕР¶РёС‚РµР»СЊ, РЅР° РєРѕС‚РѕСЂС‹Р№ СѓРјРЅРѕР¶Р°РµС‚СЃСЏ РІС‹С‡РёС‚Р°РµРјС‹Р№ СЌР»РµРјРµРЅС‚
 
 			for (int k = 0; k < block_len; ++k, a_curr += lda) {
 				u_curr = u_ptr;
@@ -421,7 +421,7 @@ private:
 	}
 
 	float* data;
-	int m, n; // Число строк и столбцов
+	int m, n; // Р§РёСЃР»Рѕ СЃС‚СЂРѕРє Рё СЃС‚РѕР»Р±С†РѕРІ
 	sycl::queue q{cpu_selector{}, property::queue::in_order()};
 };
 
