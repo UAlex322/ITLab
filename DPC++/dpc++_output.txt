@@ -1,0 +1,48 @@
+Size: 2000
+DPC++ time: 578
+DPC++ time: 509
+DPC++ time: 510
+DPC++ time: 502
+DPC++ time: 490
+Size: 4000
+DPC++ time: 2391
+DPC++ time: 2394
+DPC++ time: 2399
+DPC++ time: 2420
+DPC++ time: 2410
+Size: 6000
+DPC++ time: 7457
+DPC++ time: 8139
+DPC++ time: 8357
+DPC++ time: 8064
+DPC++ time: 8449
+Size: 8000
+DPC++ time: 20365
+DPC++ time: 21215
+DPC++ time: 21644
+DPC++ time: 22233
+DPC++ time: 21083
+Size: 10000
+DPC++ time: 42763
+DPC++ time: 41273
+DPC++ time: 42549
+DPC++ time: 40332
+DPC++ time: 43624
+Size: 12000
+DPC++ time: 72260
+DPC++ time: 72707
+DPC++ time: 76209
+DPC++ time: 74492
+DPC++ time: 72149
+Size: 14000
+DPC++ time: 114110
+DPC++ time: 115285
+DPC++ time: 117586
+DPC++ time: 113758
+DPC++ time: 113976
+Size: 16000
+DPC++ time: 172743
+DPC++ time: 173462
+DPC++ time: 168425
+DPC++ time: 169274
+DPC++ time: 170012
