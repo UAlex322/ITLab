@@ -1,0 +1,50 @@
+Start tests
+Size: 2000
+DPC++ time: 739
+DPC++ time: 549
+DPC++ time: 545
+DPC++ time: 549
+DPC++ time: 542
+Size: 4000
+DPC++ time: 2250
+DPC++ time: 2080
+DPC++ time: 2101
+DPC++ time: 2122
+DPC++ time: 2215
+Size: 6000
+DPC++ time: 6745
+DPC++ time: 7140
+DPC++ time: 7323
+DPC++ time: 7411
+DPC++ time: 7688
+Size: 8000
+DPC++ time: 18899
+DPC++ time: 17771
+DPC++ time: 19375
+DPC++ time: 17849
+DPC++ time: 17961
+Size: 10000
+DPC++ time: 35720
+DPC++ time: 37903
+DPC++ time: 36205
+DPC++ time: 36606
+DPC++ time: 35613
+Size: 12000
+DPC++ time: 62214
+DPC++ time: 61189
+DPC++ time: 64136
+DPC++ time: 62391
+DPC++ time: 62005
+Size: 14000
+DPC++ time: 100063
+DPC++ time: 99857
+DPC++ time: 100477
+DPC++ time: 100848
+DPC++ time: 102535
+Size: 16000
+DPC++ time: 149462
+DPC++ time: 144862
+DPC++ time: 149529
+DPC++ time: 150034
+DPC++ time: 146993
+
