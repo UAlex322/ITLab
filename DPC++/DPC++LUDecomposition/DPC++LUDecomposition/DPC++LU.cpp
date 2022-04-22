@@ -7,13 +7,14 @@
 using namespace sycl;
 using namespace std;
 
-const int n = 4096;
+const int n = 8192;
 const int block_size = 64;
 
 int main(int argc, char *argv[]) {
 
-    //freopen("dpc++_output.txt", "a+", stdout);
+    //freopen("dpc++_output1.txt", "a+", stdout);
 
+    std::cout << "Start tests" << std::endl;
     //for (size_t n = 2000; n <= 16000; n += 2000) {
         std::cout << "Size: " << n << std::endl;
         for (size_t i = 0; i < 5; ++i) {
@@ -28,6 +29,8 @@ int main(int argc, char *argv[]) {
 
             B.lu_trivial_sequential();
             check_correct(A,B,n,n);
+
+            A.print();
         }
     //}
 

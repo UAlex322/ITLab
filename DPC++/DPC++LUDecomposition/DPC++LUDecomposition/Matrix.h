@@ -160,6 +160,7 @@ public:
 		int bi = 0, nbi = bs;	// индексы начала текущего и следующего блоков
 
 		//float *buffer = new float[bs*n]; // буфер для блоков матрицы B в матричном умножении
+		buffer<float,1> buf(dptr, range<1>{n*n});
 
 		for (; nbi < n; dptr += bs*(n+1), bi += bs, nbi += bs) {
 			LU(dptr, n, bs);
@@ -168,8 +169,8 @@ public:
 			USolve(dptr, dptr + bs*n, n, n - nbi, bs);
 
 			//std::cout << n - nbi << std::endl;
-			FMMS(dptr + bs*n, dptr + bs, n, n - nbi, bs, mbs);
-
+			//FMMS(dptr + bs*n, dptr + bs, n, n - nbi, bs, mbs);
+			FMMS(buf, n, n-nbi, bi, bs, mbs);
 			//cblas_dgemm(CblasRowMajor, CblasNofloatrans, CblasNofloatrans, n-nbi, bs, n-nbi, -1.0, dptr + bs*n, n, dptr + bs, n, 1.0, dptr + bs*(n+1), n);
 		}
 		LU(dptr, n, n-bi);
@@ -199,6 +200,40 @@ private:
 			}
 		}
 	}
+	
+	void FMMS(buffer<float,1> &buf, const int lda, const int size, const int shift, const int bs, const int mbs) {
+		sycl::event event = q.submit([&](handler &cgh) {
+
+			sycl::accessor<float, 1, sycl::access::mode::read_write, sycl::access::target::local> buffer(2*bs*bs, cgh);
+
+			auto a = buf.get_access<sycl::access::mode::read_write>(cgh, range<1>{lda*lda}, id<1>(shift*(lda+1) + bs*lda));
+			auto b = buf.get_access<sycl::access::mode::read_write>(cgh, range<1>{lda*lda}, id<1>{shift*(lda+1) + bs});
+
+			cgh.parallel_for<class Mult>(nd_range<2>(range<2>(size,size), range<2>(mbs,mbs)), [=](nd_item<2> item) {
+				float* block_a = buffer.get_pointer();
+				float* block_b = block_a + bs*bs;
+
+				size_t li = item.get_local_id(0);			//локальный индекс в группе (строка)						
+				size_t lj = item.get_local_id(1);
+				uint32_t gi = item.get_global_id(0);
+				uint32_t gj = item.get_global_id(1);
+				//uint32_t gi = bs*item.get_group(0) + li;	//начало номера группы по строке 
+				//uint32_t gj = bs*item.get_group(1) + lj;
+
+				block_a[li*bs + lj] = a[gi*lda + lj];
+				block_b[li*bs + lj] = b[li*lda + gj];
+				item.barrier(sycl::access::fence_space::local_space);
+
+				float sum = 0.0f;
+				for (int k = 0; k < bs; ++k) {
+					sum += block_a[li*bs + k] * block_b[k*bs + lj];
+				}
+				a[gi*lda + bs + gj] -= sum;
+				item.barrier(sycl::access::fence_space::global_space);
+			});
+		});
+		event.wait();
+	}
 
 	void FMMS(float *a_ptr, float *b_ptr, const int lda, const int size, const int bs, const int mbs) {
 		//std::cout << "Call FMMS" << std::endl;
@@ -212,9 +247,8 @@ private:
 
 				sycl::accessor<float, 1, sycl::access::mode::read_write, sycl::access::target::local> buffer(2*bs*bs, cgh);
 
-				auto a = buf1.get_access<sycl::access::mode::read>(cgh);
+				auto a = buf1.get_access<sycl::access::mode::read_write>(cgh);
 				auto b = buf2.get_access<sycl::access::mode::read>(cgh);
-				auto c = buf1.get_access<sycl::access::mode::write>(cgh);
 
 				cgh.parallel_for<class _Mult>(nd_range<2>(range<2>(size,size), range<2>(mbs,mbs)), [=](nd_item<2> item) {
 					float* block_a = buffer.get_pointer();
@@ -236,7 +270,7 @@ private:
 					for (int k = 0; k < bs; ++k) {
 						sum += block_a[li*bs + k] * block_b[k*bs + lj];
 					}
-					c[gi*lda + bs + gj] -= sum;
+					a[gi*lda + bs + gj] -= sum;
 					item.barrier(sycl::access::fence_space::global_space);
 				});
 			});
