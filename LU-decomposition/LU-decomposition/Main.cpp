@@ -1,90 +1,31 @@
 #include <iostream>
 #include <algorithm>
+#include <string>
+#include <limits>
 #include <cstdlib>
-#include <ctime>
+#include <numeric>
 #include <chrono>
-//#include <mkl.h>
+#include <mkl.h>
 #include "Matrix.h"
 using namespace std;
+using namespace chrono;
 
-#define MTX_TYPE double
+#define MTX_TYPE float
 
-int main() {
-	size_t max_size, min_size;
+int main(int argc, char **argv) {
 	// MULTIPLICATION TESTS
 	//#define MULT_TEST
-#ifdef MULT_TEST
-	std::cout << "MULTIPLICATION TESTS\n";
-
-	// MKL MULT TESTS
-	std::cout << "MKL MULT TESTS" << '\n';
-	// DEFINITE SIZES
-	max_size = 4096; min_size = 2048;
-	for (size_t size = 2048, i = 1; size < max_size; size += 64, ++i) {
-		Matrix<MTX_TYPE> m1(size, size), m2(size, size), prod1(size, size), cm1, cm2, prod2;
-		m1.generate_random_matrix(); cm1 = m1;
-		m2.generate_random_matrix(); cm2 = m2;
-
-		auto start_time = chrono::steady_clock::now();
-		cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, size, size, size, 1.0, &m1(0,0), size, &m2(0,0), size, 0.0, &prod1(0,0), size);
-		auto end_time = chrono::steady_clock::now();
-		auto dur = chrono::duration_cast<chrono::milliseconds>(end_time - start_time);
-
-		prod2 = cm1 * cm2;
-
-		MTX_TYPE ae = 0.0, re = 0.0;
-		for (int i = 0; i < size; ++i) {
-			for (int j = 0; j < size; ++j) {
-				ae = std::max(ae, abs(prod2(i, j) - prod1(i, j)));
-				re = std::max(re, (prod1(i,j) == 0.0) ? 0.0 : abs(prod2(i,j)/prod1(i,j) - 1.0));
-			}
-		}
-
-		std::cout << "Random, random sizes " << i+1 << " : size - (" << size << "), time - " << dur.count() << "ms, error: absolute - " 
-			<< ae << " , relative - " << re << '\n';
-	}
-
-	// RANDOM TESTS
-	// DEFINITE SIZES
-	max_size = 4096; min_size = 2048;
-	for (size_t size = 2048, i = 1; size < max_size; size += 64, ++i) {
-		Matrix<MTX_TYPE> m1(size, size), m2(size, size);
-		m1.generate_random_matrix();
-		m2.generate_random_matrix();
-
-		auto start_time = chrono::steady_clock::now();
-		Matrix<MTX_TYPE> product = m1 * m2;
-		auto end_time = chrono::steady_clock::now();
-		auto dur = chrono::duration_cast<chrono::milliseconds>(end_time - start_time);
-
-		std::cout << "Random, definite sizes " << i << " : sizes - (" << size << " " << size << " " << size << "), time - " << dur.count() << "ms" << '\n';
-	}
-
-	// RANDOM SIZES
-	max_size = 2048;
-	for (size_t i = 0; i < 50; ++i) {
-		size_t m = rand() % (max_size - min_size + 1) + min_size, 
-			n = rand() % (max_size - min_size + 1) + min_size, 
-			p = rand() % (max_size - min_size + 1) + min_size;
-		Matrix<MTX_TYPE> m1(m,n), m2(n,p);
-		m1.generate_random_matrix();
-		m2.generate_random_matrix();
-
-		auto start_time = chrono::steady_clock::now();
-		Matrix<MTX_TYPE> product = m1 * m2;
-		auto end_time = chrono::steady_clock::now();
-		auto dur = chrono::duration_cast<chrono::milliseconds>(end_time - start_time);
-
-		std::cout << "Random, random sizes " << i+1 << " : sizes - (" << m << " " << n << " " << p << "), time - " << dur.count() << "ms" << '\n';
-	}
-#else
 
 	// LU-DECOMPOSITION TESTS
 	std::cout << "LU-DECOMPOSITION TESTS\n";
-	long long sequential_max_time,
-			  parallel_max_time,
-			  num_of_tests,
-			  sum_time;
+	int64_t	sequential_max_time,
+			parallel_max_time,
+			parallel_min_time;
+	int		max_size, 
+			min_size,
+			num_of_tests = 10,
+			lu_block = 128,
+			mtxpr_block = 128;
 
 	// BLOCK LU_DECOMPOSITION TESTS
 	std::cout << "BLOCK LU-DECOMPOSITION TESTS\n";
@@ -92,233 +33,72 @@ int main() {
 
 	sequential_max_time = 0;
 	parallel_max_time = 0;
-	for (int size = 1000; size <= 8000; size += 1000) {
-		//max_size = 8000, min_size = 8000;
-		for (size_t i = 0; i < 10; ++i) {
-			int n = size, info; //rand() % (max_size - min_size + 1) + min_size;
-			Matrix<MTX_TYPE> A(n,n);
-			A.generate_random_matrix();
+	parallel_min_time =	INT64_MAX;
 
-			auto start_time = chrono::steady_clock::now();
-			//mkl_dgetrfnp(&n, &n, &A(0,0), &n, &info);
-			A.LU3_block();
-			auto end_time = chrono::steady_clock::now();
-			auto dur = chrono::duration_cast<chrono::milliseconds>(end_time - start_time);
-			parallel_max_time = std::max(parallel_max_time, dur.count());
-
-			//B.print();
-			
-			/*for (int i = 0; i < n; ++i)
-				L(i,i) = 1.0;
-			for (int i = 1; i < n; ++i)
-				for (int j = 0; j < i; ++j) {
-					L(i, j) = A(i, j);
-					A(i,j) = 0.0;
-				}
-			for (int i = 0; i < n; ++i)
-				for (int j = i+1; j < n; ++j)
-					L(i,j) = 0.0;
-			U = L*A;
-
-			MTX_TYPE ae = 0.0, re = 0.0;
-			for (int i = 0; i < n; ++i) {
-				for (int j = 0; j < n; ++j) {
-					ae = std::max(ae, abs(U(i, j) - B(i, j)));
-					re = std::max(re, (B(i,j) == 0.0) ? 0.0 : abs(U(i,j)/B(i,j) - 1.0));
-				}
-			}*/
-
-			std::cout << "Random, random sizes " << i+1 << " : size - (" << n << "), time - " << dur.count() << "ms\n";
-		}
+	if (argc > 1) {
+		string s1(argv[1]), s2(argv[2]), s3(argv[3]);
+		max_size = min_size = stoll(s1);
+		lu_block = stoll(s2);
+		mtxpr_block = stoll(s3);
 	}
-	std::cout << "Max time: " << parallel_max_time << "ms\n\n";
-	/*
+	else
+		max_size = min_size = 8192;
+
+	//freopen("openmp_trivial_parallel_output.txt", "a+", stdout);
+
+	for (size_t n = 1000; n <= 8000; n += 1000) {
+		cout << "Size: " << n << endl;
+		for (size_t i = 0; i < 4; ++i) {
+			//int n = rand() % (max_size - min_size + 1) + min_size;
+			Matrix<MTX_TYPE> A(n,n); //B(n,n);
+			A.generate_well_conditioned_matrix(500.0, 0.04);
+			//B = A;
+
+			auto start_time = steady_clock::now();
+			//mkl_dgetrfnp(&n, &n, &A(0,0), &n, &info);
+			//A.lu_block_parallel_omp(lu_block, mtxpr_block);
+			A.lu_trivial_parallel_omp();
+			auto end_time = steady_clock::now();
+
+			//parallel_max_time = max(parallel_max_time, duration_cast<milliseconds>(end_time-start_time).count());
+			cout << "OpenMP Time: " << duration_cast<milliseconds>(end_time-start_time).count() << endl;
+			//B.lu_trivial_sequential();
+			//check_correct(A,B);
+		}
+		//}
+	}
+	//std::cout << "Max time: " << parallel_max_time << "ms\n\n";
+/*
 	// MKL LU TESTS
 	std::cout << "MKL LU TESTS\n";
-	sequential_max_time = 0;
 	parallel_max_time = 0;
-	max_size = 4000, min_size = 4000;
-	num_of_tests = 30, sum_time = 0;
+	if (argc > 1) {
+		string s(argv[1]);
+		max_size = min_size = stoll(s);
+	}
+	else
+		max_size = min_size = 10000;
 	int info;
 
 	for (size_t i = 0; i < num_of_tests; ++i) {
 		int n = rand() % (max_size - min_size + 1) + min_size;
 		Matrix<MTX_TYPE> A(n,n);
+		int *pivots = new int[n];
+		iota(pivots, pivots+n, 0);
+		
 		A.generate_random_matrix();
 		//A.print();
 
 		auto start_time = chrono::steady_clock::now();
-		mkl_dgetrfnp(&n, &n, &A(0,0), &n, &info);
+		LAPACKE_dgetrf(LAPACK_ROW_MAJOR, n, n, &A(0,0), n, pivots);
 		auto end_time = chrono::steady_clock::now();
 		auto dur = chrono::duration_cast<chrono::milliseconds>(end_time - start_time);
 		parallel_max_time = std::max(parallel_max_time, dur.count());
 		sum_time += dur.count();
-		std::cout << "Random, random sizes " << i+1 << " : size - (" << n << "), time -" << dur.count() << "ms\n";
+		std::cout << "Test " << i+1 << " : size - (" << n << "), time -" << dur.count() << "ms\n";
 	}
 	std::cout << "Max time: " << parallel_max_time << "ms, avg time - " << (MTX_TYPE)sum_time/num_of_tests << "\n\n";
 	*/
-	
-	/*
-
-	// RANDOM SIZES (LU2)
-
-	sequential_max_time = 0;
-	parallel_max_time = 0;
-	max_size = 4000, min_size = 4000;
-	num_of_tests = 20;
-	std::cout << "Sequential: \n";
-	for (size_t i = 0; i < num_of_tests; ++i) {
-		size_t n = rand() % (max_size - min_size + 1) + min_size;
-		Matrix<MTX_TYPE> A(n,n), U(n,n);
-		A.generate_random_matrix();
-		//A.print();
-
-		auto start_time = chrono::steady_clock::now();
-		A.LU2_sequential();
-		auto end_time = chrono::steady_clock::now();
-		auto dur = chrono::duration_cast<chrono::milliseconds>(end_time - start_time);
-		sequential_max_time = std::max(sequential_max_time, dur.count());
-
-		//A.print();
-		std::cout << "Random, random sizes " << i+1 << " : size - (" << n << "), seq time - " << dur.count() << "ms\n";
-
-	}
-
-	std::cout << "Parallel: \n";
-	for (size_t i = 0; i < num_of_tests; ++i) {
-		size_t n = rand() % (max_size - min_size + 1) + min_size;
-		Matrix<MTX_TYPE> A(n, n), U(n, n);
-		A.generate_random_matrix();
-		//A.print();
-
-		auto start_time = chrono::steady_clock::now();
-		A.LU2_parallel();
-		auto end_time = chrono::steady_clock::now();
-		auto dur = chrono::duration_cast<chrono::milliseconds>(end_time - start_time);
-		parallel_max_time = std::max(parallel_max_time, dur.count());
-
-		std::cout << "Random, random sizes " << i+1 << " : size - (" << n << "), par time - " << dur.count() << "ms\n";
-	}
-	std::cout << "Max seq time: " << sequential_max_time << "ms, max par time - " << parallel_max_time << "\n\n";
-
-	*/
-
-	/*
-
-	// DEFINITE SIZES (LU1)
-
-	sequential_max_time = 0;
-	parallel_max_time = 0;
-	max_size = 2048;
-	for (size_t n = 2, i = 1; n <= max_size; n += 2, ++i) {
-		Matrix<MTX_TYPE> A(n,n), L(n,n), U(n,n);
-		A.generate_random_matrix();
-		//A.print();
-
-		auto start_time = chrono::steady_clock::now();
-		A.LU1(L,U);
-		auto end_time = chrono::steady_clock::now();
-		auto dur = chrono::duration_cast<chrono::milliseconds>(end_time - start_time);
-		sequential_max_time = std::max(sequential_max_time, dur.count());
-		Matrix<MTX_TYPE> C = L*U;
-		//L.print();
-		//U.print();
-		//C.print();
-		MTX_TYPE ae = 0.0, re = 0.0;
-		for (int i = 0; i < n; ++i) {
-			for (int j = 0; j < n; ++j) {
-				ae = std::max(ae, abs(C(i, j) - A(i, j)));
-				re = std::max(re, (A(i,j) == 0.0) ? 0.0 : abs(C(i,j)/A(i,j) - 1.0));
-			}
-		}
-		std::cout << "Random, definite sizes " << i << " : size - (" << n << "), error: absolute - " << ae << " , relative - " <<
-			re << " ,time - " << dur.count() << "ms" << '\n';
-	}
-	std::cout << "Maximal time: " << sequential_max_time << "\n\n";
-
-	*/
-
-
-
-	/*
-
-	// WELL-CONDITIONED TESTS
-	// 
-	// RANDOM SIZES
-	max_size = 500, min_size = 500;
-	for (size_t i = 0; i < 1; ++i) {
-		size_t n = rand() % (max_size - min_size + 1) + min_size;
-		Matrix<MTX_TYPE> A(n,n), L(n,n), U(n,n);
-		A.generate_well_conditioned_matrix(3000.0);
-		//A.print();
-
-		auto start_time = chrono::steady_clock::now();
-		A.LU1(L,U);
-		auto end_time = chrono::steady_clock::now();
-		auto dur = chrono::duration_cast<chrono::milliseconds>(end_time - start_time);
-		sequential_max_time = std::max(sequential_max_time, dur.count());
-		Matrix<MTX_TYPE> C = L*U;
-
-		//C.print();
-		MTX_TYPE ae = 0.0, re = 0.0;
-		//for (int i = 0; i < n; ++i) {
-		//	for (int j = 0; j < n; ++j) {
-		//		std::cout << std::fixed << A(i, j) << " ";
-		//	}
-		//	std::cout << '\n';
-		//}
-		for (int i = 0; i < n; ++i) {
-			for (int j = 0; j < n; ++j) {
-				ae = std::max(ae, abs(C(i,j) - A(i,j)));
-				re = std::max(re, (A(i,j) == 0.0) ? 0.0 : abs(C(i,j)/A(i,j) - 1.0));
-				//std::cout << std::fixed << C(i,j)/A(i,j) - 1.0 << " ";
-			}
-			//std::cout << '\n';
-		}
-
-		std::cout << std::defaultfloat << "Well-conditioned, random sizes " << i+1 << " : size - (" << n << "), error : absolute - " << ae << ", relative - " <<
-			re << " ,time - " << dur.count() << "ms" << '\n';
-	}
-	std::cout << "Maximal time: " << sequential_max_time << "\n\n";
-
-	*/
-
-	/*
-
-	// RANDOM TESTS 
-	// 
-	// RANDOM SIZES
-
-	sequential_max_time = 0;
-	max_size = 2048, min_size = 2047;
-	for (size_t i = 0; i < 50; ++i) {
-		size_t n = rand() % (max_size - min_size) + min_size;
-		Matrix<MTX_TYPE> A(n,n), L(n,n), U(n,n);
-		A.generate_random_matrix();
-		//A.print();
-
-		auto start_time = chrono::steady_clock::now();
-		A.LU1(L,U);
-		auto end_time = chrono::steady_clock::now();
-		auto dur = chrono::duration_cast<chrono::milliseconds>(end_time - start_time);
-		sequential_max_time = std::max(sequential_max_time, dur.count());
-		Matrix<MTX_TYPE> C = L*U;
-		//C.print();
-		MTX_TYPE ae = 0.0, re = 0.0;
-		for (int i = 0; i < n; ++i)
-			for (int j = 0; j < n; ++j) {
-				ae = std::max(ae, abs(C(i,j) - A(i,j)));
-				re = std::max(re, (A(i,j) == 0.0) ? 0.0 : abs(C(i,j)/A(i,j) - 1.0));
-			}
-
-		std::cout << "Random, random sizes " << i+1 << " : size - (" << n << "), error: absolute - " << ae << " , relative - " <<
-			re << " ,time - " << dur.count() << "ms" << '\n';
-	}
-	std::cout << "Maximal time: " << sequential_max_time << "\n\n";
-
-	*/
-
-#endif
 
 	return 0;
 }

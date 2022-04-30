@@ -1,8 +1,14 @@
+#pragma once
 #include <iostream>
+#include <random>
 #include <omp.h>
+using namespace std;
+
 template <typename T>
 class Matrix {
 public:
+
+	friend void check_correct(const Matrix &M1, const Matrix &M2);
 
 	Matrix(int rows = 0, int cols = 0): m(rows), n(cols) {
 		data = new T[m*n];
@@ -34,24 +40,23 @@ public:
 		delete[] data;
 		m = 0; n = 0;
 	}
-
-	void generate_random_matrix() {
-		srand(time(0));
-
-		for (int i = 0; i < m; ++i)
-			for (int j = 0; j < n; ++j)
-				data[i*n+j] = (rand() - 16384) / 2048.0;
+	
+	inline void generate_random_matrix() {
+		mt19937 gen(random_device{}());
+		uniform_real_distribution<T> dist(-5.0, 5.0);
+		#pragma omp parallel for
+		for (int i = 0; i < m*n; ++i)
+			data[i] = dist(gen);
 	}
 
-	void generate_well_conditioned_matrix(T &mean_value) {
-		srand(time(0));
+	inline void generate_well_conditioned_matrix(const T &avg_diag_val, const T &max_val) {
+		mt19937 gen(random_device{}());
+		uniform_real_distribution<float> d(-max_val, max_val);
 
+		for (int i = 0; i < m*n; ++i)
+			data[i] = d(gen);
 		for (int i = 0; i < m; ++i)
-			for (int j = 0; j < n; ++j) {
-				data[i*n+j] = (rand() - 16384) / 2048.0;
-			}
-		for (int i = 0; i < m; ++i)
-			data[i*(m+1)] = (rand() % 2 ? -1 : 1) * (mean_value + (rand() % 10000) * 0.0001);
+			data[i*(m+1)] = (gen() % 2 ? -1 : 1) * (avg_diag_val + gen() % 10000 * 0.001);
 	}
 
 	inline const T& operator()(int row, int col) const {
@@ -96,12 +101,10 @@ public:
 	}
 
 	Matrix operator*(const Matrix &b) {
-		Matrix<T> c(m, b.n);
 		int p = b.n;
+		Matrix<T> c(m, p);
 
-		for (int i = 0; i < n; ++i)
-			for (int j = 0; j < p; ++j)
-				c.data[i*p + j] = 0.0;
+		memset(c.data, 0, m*p*sizeof(T));
 
 		Mult(data, b.data, c.data, n, p, p, m, n, b.n);
 
@@ -111,7 +114,7 @@ public:
 
 
 	// Обычный алгоритм (последовательная версия)
-	void LU2_sequential() {
+	void lu_trivial_sequential() {
 		T *ptr1 = data, *ptr2;
 		T mult;
 
@@ -130,18 +133,16 @@ public:
 	}
 	
 	// Обычный алгоритм (параллельная версия)
-	void LU2_parallel() {
-		T *ptr1 = data, *ptr2;
-		T mult;
+	void lu_trivial_parallel_omp() {
+		T *ptr1 = data;
 
 		for (int j = 0; j < n-1; ++j, ptr1 += n) {
-			ptr2 = ptr1 + n;
-
-			for (int i = j+1; i < n; ++i, ptr2 += n) {
-				mult = ptr2[j]/ptr1[j];
+		#pragma omp parallel for
+			for (int i = j+1; i < n; ++i) {
+				T *ptr2 = data + i*n;
+				T mult = ptr2[j]/ptr1[j];
 				ptr2[j] = mult;
 
-			#pragma omp parallel for
 				for (int k = j+1; k < n; ++k) {
 					ptr2[k] -= mult*ptr1[k];
 				}
@@ -150,20 +151,22 @@ public:
 	}
 
 	// Блочный алгоритм (параллельная версия)
-	void LU3_block() {
+	void lu_block_parallel_omp(const int ls, const int mbs) {
 		T *dptr = data;
-		constexpr int bs = 192;	  // размер блока
-		int bi = 0, nbi = bs; // индексы начала текущего и следующего блоков
+		const int bs = ls;		// размер блока
+		int bi = 0, nbi = bs;	// индексы начала текущего и следующего блоков
 
-		T *buffer = new T[bs*bs*omp_get_max_threads()]; // буфер для блоков матрицы B в матричном умножении
+		T *buffer = new T[mbs*bs*omp_get_max_threads()]; // буфер для блоков матрицы B в матричном умножении
 
 		for (; nbi < n; dptr += bs*(n+1), bi += bs, nbi += bs) {
 			LU(dptr, n, bs);
 
 			LSolve(dptr, dptr + bs, n, bs, n - nbi);
 			USolve(dptr, dptr + bs*n, n, n - nbi, bs);
-
-			FMMS2(dptr + bs*n, dptr + bs, dptr + bs*(n + 1), buffer, n, n, n, n - nbi, bs, n - nbi, bs);
+			
+			//std::cout << n - nbi << std::endl;
+			FMMS2(dptr + bs*n, dptr + bs, dptr + bs*(n + 1), buffer, n, n, n, n - nbi, bs, n - nbi, bs, mbs);
+			//cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, n-nbi, bs, n-nbi, -1.0, dptr + bs*n, n, dptr + bs, n, 1.0, dptr + bs*(n+1), n);
 		}
 		LU(dptr, n, n-bi);
 
@@ -191,11 +194,11 @@ private:
 	}
 
 	// Оптимизированная версия FMMS с транспонированием блоков
-	void FMMS2(const T *a_ptr, const T *b_ptr, T *c_ptr, T *buffer, const int lda, const int ldb, const int ldc, const int m, const int n, const int p, const int bs) {
-		const int num_of_blocks = (m+bs-1)/bs;
+	void FMMS2(const T *a_ptr, const T *b_ptr, T *c_ptr, T *buffer, const int lda, const int ldb, const int ldc, const int m, const int n, const int p, const int bs, const int mbs) {
+		const int num_of_blocks = (m+mbs-1)/mbs;
 		int *pos = new int[num_of_blocks+1];
 		for (int i = 0; i < num_of_blocks; ++i)
-			pos[i] = i*bs;
+			pos[i] = i*mbs;
 		pos[num_of_blocks] = m;
 
 	#pragma omp parallel for
@@ -205,7 +208,7 @@ private:
 					*a_curr = a_ptr,
 					*b_curr;
 				  T *c_curr = c_ptr + pos[jb],
-					*nbt_ptr = buffer + bs*bs*omp_get_thread_num(),
+					*nbt_ptr = buffer + mbs*bs*omp_get_thread_num(),
 					 sum;
 
 			for (int i = 0; i < bs; ++i)
@@ -217,7 +220,7 @@ private:
 				for (int j = 0; j < bb_len; ++j, b_curr += bs) {
 					sum = 0.0;
 					for (int k = 0; k < bs; ++k)
-						sum += a_curr[k] * b_curr[k];
+						sum += a_curr[k] * b_curr[k]; //a_curr[i*lda + k] * nbt_ptr[j*bs + k];
 					c_curr[j] -= sum;
 				}
 			}
@@ -261,19 +264,16 @@ private:
 
 	// Общее LU-разложение (применяется для блока в матрице)
 	void LU(T *a_ptr, const int lda, const int n) {
-		T *ptr1 = a_ptr, // указатель на текущую вычитаемую строку 
-		  *ptr2,		 // указатель на текущую уменьшаемую строку
-		  mult;			 // множитель, на который умножается вычитаемая строка
+		T *ptr1 = a_ptr; // указатель на текущую вычитаемую строку
 
-		for (int j = 0; j < n - 1; ++j, ptr1 += lda) {
-			ptr2 = ptr1 + lda;
-
-			for (int i = j + 1; i < n; ++i, ptr2 += lda) {
-				mult = ptr2[j]/ptr1[j];
+		for (int j = 0; j < n-1; ++j, ptr1 += lda) {
+		#pragma omp parallel for
+			for (int i = j+1; i < n; ++i) {
+				T *ptr2 = data + i*n;		// указатель на текущую уменьшаемую строку
+				T mult = ptr2[j]/ptr1[j];	// множитель, на который умножается вычитаемая строка
 				ptr2[j] = mult;
 
-			//#pragma omp parallel for
-				for (int k = j + 1; k < n; ++k) {
+				for (int k = j+1; k < n; ++k) {
 					ptr2[k] -= mult*ptr1[k];
 				}
 			}
@@ -343,3 +343,34 @@ private:
 	T* data;
 	int m, n; // Число строк и столбцов
 };
+
+void check_correct(const Matrix<double> &M1, const Matrix<double> &M2) {
+	if (M1.m != M2.m || M1.n != M2.n)
+		throw "Matrices have different sizes";
+
+	double *ptr1 = M1.data, *ptr2 = M2.data;
+	double ae = 0.0, re = 0.0;
+
+#pragma omp parallel for
+	for (int i = 0; i < M1.m * M1.n; ++i) {
+		ae = std::max(ae, abs(ptr2[i] - ptr1[i]));
+		re = std::max(re, (ptr1[i] == 0.0) ? 0.0 : abs(ptr2[i]/ptr1[i] - 1.0));
+	}
+	cout << "Absolute error: " << ae << '\n' << "Relative error: " << re << endl;
+}
+
+void check_correct(const Matrix<float> &M1, const Matrix<float> &M2) {
+	if (M1.m != M2.m || M1.n != M2.n)
+		throw "Matrices have different sizes";
+
+	float *ptr1 = M1.data, *ptr2 = M2.data;
+	float ae = 0.0, re = 0.0;
+
+#pragma omp parallel for
+	for (int i = 0; i < M1.m * M1.n; ++i) {
+		ae = std::max(ae, abs(ptr2[i] - ptr1[i]));
+		re = std::max(re, (ptr1[i] == 0.0f) ? 0.0f : abs(ptr2[i]/ptr1[i] - 1.0f));
+	}
+	cout << "Absolute error: " << ae << '\n' << "Relative error: " << re << std::endl;
+}
+
