@@ -164,8 +164,7 @@ public:
 			LSolve(dptr, dptr + bs, n, bs, n - nbi);
 			USolve(dptr, dptr + bs*n, n, n - nbi, bs);
 			
-			//std::cout << n - nbi << std::endl;
-			FMMS2(dptr + bs*n, dptr + bs, dptr + bs*(n + 1), buffer, n, n, n, n - nbi, bs, n - nbi, bs, mbs);
+			FMMS(dptr + bs*n, dptr + bs, dptr + bs*(n + 1), buffer, n, n, n, n - nbi, bs, n - nbi, bs, mbs);
 			//cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, n-nbi, bs, n-nbi, -1.0, dptr + bs*n, n, dptr + bs, n, 1.0, dptr + bs*(n+1), n);
 		}
 		LU(dptr, n, n-bi);
@@ -176,8 +175,7 @@ public:
 private:
 
 	// Общий алгоритм умножения матриц 
-	void Mult(const T* a_ptr, const T* b_ptr, T *c_ptr, const int lda, const int ldb, const int ldc, const int m, const int n, const int p) {
-		//int bp, cp;
+	void mult(const T* a_ptr, const T* b_ptr, T *c_ptr, const int lda, const int ldb, const int ldc, const int m, const int n, const int p) {
 
 	#pragma omp parallel for
 		for (int i = 0; i < m; ++i) {
@@ -194,7 +192,7 @@ private:
 	}
 
 	// Оптимизированная версия FMMS с транспонированием блоков
-	void FMMS2(const T *a_ptr, const T *b_ptr, T *c_ptr, T *buffer, const int lda, const int ldb, const int ldc, const int m, const int n, const int p, const int bs, const int mbs) {
+	void FMMS(const T *a_ptr, const T *b_ptr, T *c_ptr, T *buffer, const int lda, const int ldb, const int ldc, const int m, const int n, const int p, const int bs, const int mbs) {
 		const int num_of_blocks = (m+mbs-1)/mbs;
 		int *pos = new int[num_of_blocks+1];
 		for (int i = 0; i < num_of_blocks; ++i)
@@ -222,41 +220,6 @@ private:
 					for (int k = 0; k < bs; ++k)
 						sum += a_curr[k] * b_curr[k]; //a_curr[i*lda + k] * nbt_ptr[j*bs + k];
 					c_curr[j] -= sum;
-				}
-			}
-		}
-	}
-
-	// Без транспонирования
-	void FMMS1(const T *a_ptr, const T *b_ptr, T *c_ptr, const int lda, const int ldb, const int ldc, const int m, const int n, const int p, const int bs) {
-		const int num_of_blocks = (m+bs-1)/bs;
-		int *pos = new int[num_of_blocks+1];
-		for (int i = 0; i < num_of_blocks; ++i)
-			pos[i] = i*bs;
-		pos[num_of_blocks] = m;
- 
-		#pragma omp parallel for
-		for (int ib = 0; ib < num_of_blocks; ++ib) {
-			for (int jb = 0; jb < num_of_blocks; ++jb) {
-				//for (int it = 0; it < num_of_blocks*num_of_blocks; ++it) {
-				const int //ib = it/num_of_blocks,
-						  //jb = it % num_of_blocks,
-					ba_len = pos[ib+1]-pos[ib],
-					bb_len = pos[jb+1]-pos[jb];
-				const T *na_ptr = a_ptr + pos[ib]*lda,
-					*nb_ptr = b_ptr + pos[jb];
-				T		*nc_ptr = c_ptr + pos[ib]*ldc + pos[jb],
-					a_elem;
-
-				for (int i = 0; i < ba_len; ++i, nc_ptr += ldc, na_ptr += lda) {
-					const T *b_curr = nb_ptr;
-
-					for (int k = 0; k < bs; ++k, b_curr += ldb) {
-						a_elem = na_ptr[k];
-
-						for (int j = 0; j < bb_len; ++j)
-							nc_ptr[j] -= a_elem * b_curr[j];
-					}
 				}
 			}
 		}
