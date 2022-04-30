@@ -1,6 +1,4 @@
 Size: 2000
-Time: 157
-Size: 2000
 OpenMP Time: 202
 OpenMP Time: 216
 OpenMP Time: 184
