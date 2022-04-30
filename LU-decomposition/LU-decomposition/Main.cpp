@@ -21,50 +21,56 @@ int main(int argc, char **argv) {
 	int64_t	sequential_max_time,
 			parallel_max_time,
 			parallel_min_time;
-	int		max_size, 
+	int		max_size,
 			min_size,
 			num_of_tests = 10,
 			lu_block = 128,
-			mtxpr_block = 128;
-
-	// BLOCK LU_DECOMPOSITION TESTS
-	std::cout << "BLOCK LU-DECOMPOSITION TESTS\n";
-	// RANDOM SIZES
+			mtx_product_block = 128;
 
 	sequential_max_time = 0;
 	parallel_max_time = 0;
 	parallel_min_time =	INT64_MAX;
 
+	// ѕриЄм аргументов из командной строки:
+	// argv[1] - пор€док матрицы
+	// argv[2] - длина блока в LU-разложении
+	// argv[3] - длина блока в матричном умножении
+	// ¬ умножении идЄт разбиение на блоки 'argv[2] x argv[3]'
 	if (argc > 1) {
 		string s1(argv[1]), s2(argv[2]), s3(argv[3]);
 		max_size = min_size = stoll(s1);
 		lu_block = stoll(s2);
-		mtxpr_block = stoll(s3);
+		mtx_product_block = stoll(s3);
 	}
 	else
 		max_size = min_size = 8192;
 
 	//freopen("openmp_trivial_parallel_output.txt", "a+", stdout);
 
-	for (size_t n = 1000; n <= 8000; n += 1000) {
-		cout << "Size: " << n << endl;
-		for (size_t i = 0; i < 4; ++i) {
-			//int n = rand() % (max_size - min_size + 1) + min_size;
-			Matrix<MTX_TYPE> A(n,n); //B(n,n);
+	for (size_t size = 1000; size <= 8000; size += 1000) {
+
+		cout << "Size: " << size << endl;
+
+		for (size_t num_of_tests = 0; num_of_tests < 4; ++num_of_tests) {
+			Matrix<MTX_TYPE> A(size, size); //B(n,n);
 			A.generate_well_conditioned_matrix(500.0, 0.04);
 			//B = A;
 
 			auto start_time = steady_clock::now();
-			//mkl_dgetrfnp(&n, &n, &A(0,0), &n, &info);
-			//A.lu_block_parallel_omp(lu_block, mtxpr_block);
-			A.lu_trivial_parallel_omp();
+
+			//A.lu_trivial_sequential();
+			//A.lu_trivial_parallel_omp();
+			//A.lu_block_parallel_omp(lu_block, mtx_product_block);
+
 			auto end_time = steady_clock::now();
 
 			//parallel_max_time = max(parallel_max_time, duration_cast<milliseconds>(end_time-start_time).count());
 			cout << "OpenMP Time: " << duration_cast<milliseconds>(end_time-start_time).count() << endl;
 			//B.lu_trivial_sequential();
 			//check_correct(A,B);
+
 		}
+
 		//}
 	}
 	//std::cout << "Max time: " << parallel_max_time << "ms\n\n";

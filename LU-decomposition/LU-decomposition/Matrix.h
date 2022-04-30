@@ -106,7 +106,7 @@ public:
 
 		memset(c.data, 0, m*p*sizeof(T));
 
-		Mult(data, b.data, c.data, n, p, p, m, n, b.n);
+		mult(data, b.data, c.data, n, p, p, m, n, b.n);
 
 		return c;
 	}
@@ -297,6 +297,41 @@ private:
 				mult = u_ptr[j*(lda + 1)];
 				for (int k = 0; k < block_len; ++k)
 					na_ptr[k*lda + j] /= mult;
+			}
+		}
+	}
+
+	// Без транспонирования
+	void FMMS1(const T *a_ptr, const T *b_ptr, T *c_ptr, const int lda, const int ldb, const int ldc, const int m, const int n, const int p, const int bs) {
+		const int num_of_blocks = (m+bs-1)/bs;
+		int *pos = new int[num_of_blocks+1];
+		for (int i = 0; i < num_of_blocks; ++i)
+			pos[i] = i*bs;
+		pos[num_of_blocks] = m;
+
+	#pragma omp parallel for
+		for (int ib = 0; ib < num_of_blocks; ++ib) {
+			for (int jb = 0; jb < num_of_blocks; ++jb) {
+				//for (int it = 0; it < num_of_blocks*num_of_blocks; ++it) {
+				const int //ib = it/num_of_blocks,
+						  //jb = it % num_of_blocks,
+					ba_len = pos[ib+1]-pos[ib],
+					bb_len = pos[jb+1]-pos[jb];
+				const T *na_ptr = a_ptr + pos[ib]*lda,
+					*nb_ptr = b_ptr + pos[jb];
+				T		*nc_ptr = c_ptr + pos[ib]*ldc + pos[jb],
+					a_elem;
+
+				for (int i = 0; i < ba_len; ++i, nc_ptr += ldc, na_ptr += lda) {
+					const T *b_curr = nb_ptr;
+
+					for (int k = 0; k < bs; ++k, b_curr += ldb) {
+						a_elem = na_ptr[k];
+
+						for (int j = 0; j < bb_len; ++j)
+							nc_ptr[j] -= a_elem * b_curr[j];
+					}
+				}
 			}
 		}
 	}
