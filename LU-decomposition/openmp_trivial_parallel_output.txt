@@ -1,0 +1,74 @@
+Size: 2000
+OpenMP Time: 1244
+OpenMP Time: 1193
+OpenMP Time: 1215
+OpenMP Time: 1271
+OpenMP Time: 1104
+Size: 4000
+OpenMP Time: 10167
+OpenMP Time: 10124
+OpenMP Time: 10105
+OpenMP Time: 10144
+OpenMP Time: 10107
+Size: 6000
+OpenMP Time: 34237
+OpenMP Time: 34440
+OpenMP Time: 34406
+OpenMP Time: 34360
+OpenMP Time: 34354
+Size: 8000
+OpenMP Time: 81111
+OpenMP Time: 81585
+OpenMP Time: 81430
+OpenMP Time: 81146
+OpenMP Time: 81819
+Size: 10000
+OpenMP Time: 158546
+OpenMP Time: 158293
+OpenMP Time: 158464
+OpenMP Time: 157850
+OpenMP Time: 158306
+Size: 12000
+Size: 14000
+OpenMP Time: 432430
+Size: 16000
+Size: 1000
+OpenMP Time: 40
+OpenMP Time: 34
+OpenMP Time: 29
+OpenMP Time: 50
+Size: 2000
+OpenMP Time: 1239
+OpenMP Time: 1169
+OpenMP Time: 1181
+OpenMP Time: 1301
+Size: 3000
+OpenMP Time: 4206
+OpenMP Time: 4188
+OpenMP Time: 4240
+OpenMP Time: 4216
+Size: 4000
+OpenMP Time: 10099
+OpenMP Time: 10119
+OpenMP Time: 10113
+OpenMP Time: 10108
+Size: 5000
+OpenMP Time: 19876
+OpenMP Time: 19940
+OpenMP Time: 19947
+OpenMP Time: 19945
+Size: 6000
+OpenMP Time: 34412
+OpenMP Time: 34365
+OpenMP Time: 34472
+OpenMP Time: 35149
+Size: 7000
+OpenMP Time: 54499
+OpenMP Time: 54551
+OpenMP Time: 54567
+OpenMP Time: 54577
+Size: 8000
+OpenMP Time: 81758
+OpenMP Time: 81082
+OpenMP Time: 81008
+OpenMP Time: 81157
