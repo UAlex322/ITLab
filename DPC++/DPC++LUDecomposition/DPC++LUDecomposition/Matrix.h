@@ -195,8 +195,7 @@ private:
 		sycl::event event = q.submit([&](handler &cgh) {
 
 			//sycl::accessor<float, 1, sycl::access::mode::read_write, sycl::access::target::local> buffer(2*bs*bs, cgh);
-			sycl::accessor<float, 1, sycl::access::mode::read_write, sycl::access::target::local> block_a(bs*bs, cgh),
-																								  block_b(bs*bs, cgh);
+			sycl::accessor<float, 1, sycl::access::mode::read_write, sycl::access::target::local> block_a(bs*bs, cgh), block_b(bs*bs, cgh);
 
 			auto a = buf.get_access<sycl::access::mode::read_write>(cgh, range<1>{lda*lda}, id<1>(shift*(lda+1) + bs*lda));
 			auto b = buf.get_access<sycl::access::mode::read_write>(cgh, range<1>{lda*lda}, id<1>{shift*(lda+1) + bs});
@@ -205,7 +204,7 @@ private:
 				//float* block_a = buffer.get_pointer();
 				//float* block_b = block_a + bs*bs;
 
-				size_t li = item.get_local_id(0);			//локальный индекс в группе (строка)						
+				size_t li = item.get_local_id(0);					
 				size_t lj = item.get_local_id(1);
 				size_t gi = item.get_global_id(0);
 				size_t gj = item.get_global_id(1);
