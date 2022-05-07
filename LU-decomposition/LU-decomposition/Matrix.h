@@ -150,13 +150,17 @@ public:
 		}
 	}
 
-	// Блочный алгоритм (параллельная версия)
-	void lu_block_parallel_omp(const int ls, const int mbs) {
+	// Блочный алгоритм
+	void lu_block(const int ls, const int mbs) {
 		T *dptr = data;
 		const int bs = ls;		// размер блока
 		int bi = 0, nbi = bs;	// индексы начала текущего и следующего блоков
 
+		#ifdef PARALLEL
 		T *buffer = new T[mbs*bs*omp_get_max_threads()]; // буфер для блоков матрицы B в матричном умножении
+		#else
+		T *buffer = new T[mbs*bs*n]; // буфер для блоков матрицы B в матричном умножении
+		#endif
 
 		for (; nbi < n; dptr += bs*(n+1), bi += bs, nbi += bs) {
 			LU(dptr, n, bs);
@@ -164,8 +168,7 @@ public:
 			LSolve(dptr, dptr + bs, n, bs, n - nbi);
 			USolve(dptr, dptr + bs*n, n, n - nbi, bs);
 			
-			FMMS(dptr + bs*n, dptr + bs, dptr + bs*(n + 1), buffer, n, n, n, n - nbi, bs, n - nbi, bs, mbs);
-			//cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, n-nbi, bs, n-nbi, -1.0, dptr + bs*n, n, dptr + bs, n, 1.0, dptr + bs*(n+1), n);
+			FMMSTranspose(dptr + bs*n, dptr + bs, dptr + bs*(n + 1), buffer, n, n, n, n - nbi, bs, n - nbi, bs, mbs);
 		}
 		LU(dptr, n, n-bi);
 
@@ -192,25 +195,31 @@ private:
 	}
 
 	// Оптимизированная версия FMMS с транспонированием блоков
-	void FMMS(const T *a_ptr, const T *b_ptr, T *c_ptr, T *buffer, const int lda, const int ldb, const int ldc, const int m, const int n, const int p, const int bs, const int mbs) {
+	void FMMSTranspose(const T *a_ptr, const T *b_ptr, T *c_ptr, T *buffer, const int lda, const int ldb, const int ldc, const int m, const int n, const int p, const int bs, const int mbs) {
 		const int num_of_blocks = (m+mbs-1)/mbs;
 		int *pos = new int[num_of_blocks+1];
 		for (int i = 0; i < num_of_blocks; ++i)
 			pos[i] = i*mbs;
 		pos[num_of_blocks] = m;
 
+	#ifdef PARALLEL
 	#pragma omp parallel for
+	#endif
 		for (int jb = 0; jb < num_of_blocks; ++jb) {
 			const int bb_len = pos[jb+1]-pos[jb];
 			const T *nb_ptr = b_ptr + pos[jb],
 					*a_curr = a_ptr,
 					*b_curr;
 				  T *c_curr = c_ptr + pos[jb],
+				  #ifdef PARALLEL
 					*nbt_ptr = buffer + mbs*bs*omp_get_thread_num(),
+				  #else
+					*nbt_ptr = buffer + mbs*bs*jb,
+				  #endif
 					 sum;
 
-			for (int i = 0; i < bs; ++i)
-				for (int j = 0; j < bb_len; ++j)
+			for (int j = 0; j < bb_len; ++j)
+				for (int i = 0; i < bs; ++i)
 					nbt_ptr[j*bs + i] = nb_ptr[i*ldb + j];
 
 			for (int i = 0; i < m; ++i, a_curr += lda, c_curr += ldc) {
@@ -230,6 +239,7 @@ private:
 		T *ptr1 = a_ptr; // указатель на текущую вычитаемую строку
 
 		for (int j = 0; j < n-1; ++j, ptr1 += lda) {
+
 		#pragma omp parallel for
 			for (int i = j+1; i < n; ++i) {
 				T *ptr2 = data + i*n;		// указатель на текущую уменьшаемую строку
@@ -248,7 +258,9 @@ private:
 		// m - высота обеих матриц, n - длина искомой матрицы
 		const int block_size = m, num_of_blocks = (n+m-1)/m;
 
+	#ifdef PARALLEL
 	#pragma omp parallel for
+	#endif
 		for (int it = 0; it < num_of_blocks; ++it) {
 			int block_len = (it+1 == num_of_blocks) ? ((n % block_size != 0) ? n % block_size : block_size) : block_size; // длина текущего блока
 			T *na_ptr = a_ptr + block_size*it, // указатель на начало текущего блока
@@ -275,7 +287,9 @@ private:
 		// m - высота искомой матрицы, n - длина обеих матриц
 		const int block_size = n, num_of_blocks = (m + n - 1)/n;
 
+	#ifdef PARALLEL
 	#pragma omp parallel for
+	#endif
 		for (int it = 0; it < num_of_blocks; ++it) {
 			int block_len = (it + 1 == num_of_blocks) ? ((m % block_size != 0) ? m % block_size : block_size) : block_size; // высота текущего блока
 			const T *u_curr;					   // указатель на текущую строку верхнетреугольной матрицы
@@ -302,7 +316,7 @@ private:
 	}
 
 	// Без транспонирования
-	void FMMS1(const T *a_ptr, const T *b_ptr, T *c_ptr, const int lda, const int ldb, const int ldc, const int m, const int n, const int p, const int bs) {
+	void FMMSNoTranspose(const T *a_ptr, const T *b_ptr, T *c_ptr, const int lda, const int ldb, const int ldc, const int m, const int n, const int p, const int bs) {
 		const int num_of_blocks = (m+bs-1)/bs;
 		int *pos = new int[num_of_blocks+1];
 		for (int i = 0; i < num_of_blocks; ++i)
@@ -336,8 +350,7 @@ private:
 		}
 	}
 
-	
-	// 
+	// DATA
 	T* data;
 	int m, n; // Число строк и столбцов
 };
