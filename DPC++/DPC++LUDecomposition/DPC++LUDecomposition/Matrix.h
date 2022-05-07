@@ -9,13 +9,13 @@ using namespace std;
 class Matrix {
 public:
 
-	friend void check_correct(const Matrix &M1, const Matrix &M2, int m, int n);
+	friend void check_correct(const Matrix &M1, const Matrix &M2);
 
-	Matrix(int rows = 0, int cols = 0): m(rows), n(cols) {
+	Matrix(int rows = 0, int cols = 0, const sycl::queue &queue = queue{cpu_selector{}}): m(rows), n(cols), q(queue) {
 		data = new float[m*n];
 	}
 
-	Matrix(const Matrix &mtx): m(mtx.m), n(mtx.n) {
+	Matrix(const Matrix &mtx): m(mtx.m), n(mtx.n), q(mtx.q) {
 		data = new float[m*n];
 		for (int i = 0; i < m*n; ++i)
 			data[i] = mtx.data[i];
@@ -24,6 +24,7 @@ public:
 	Matrix& operator=(const Matrix &mtx) {
 		if (this == &mtx) return *this;
 
+		q = mtx.q;
 		if (m != mtx.m || n != mtx.n) {
 			delete[] data;
 			data = new float[mtx.m*mtx.n];
@@ -49,9 +50,9 @@ public:
 				data[i] = d(gen);
 	}
 
-	void generate_well_conditioned_matrix(const float avg_diag_val, const float max_val) {
+	void generate_well_conditioned_matrix(const float avg_diag_val, const float max_deviation) {
 		mt19937 gen(random_device{}());
-		uniform_real_distribution<float> d(-max_val, max_val);
+		uniform_real_distribution<float> d(-max_deviation, max_deviation);
 
 		for (int i = 0; i < m*n; ++i)
 			data[i] = d(gen);
@@ -71,6 +72,10 @@ public:
 		for (int i = 0; i < m; ++i)
 			for (int j = 0; j < n; ++j)
 				std::cin >> data[i*n + j];
+	}
+
+	TYPE* get_ptr() const {
+		return data;
 	}
 
 	void print() const {
@@ -112,8 +117,6 @@ public:
 		return c;
 	}
 
-
-
 	// Обычный алгоритм (последовательная версия)
 	void lu_trivial_sequential() {
 		float *ptr1 = data, *ptr2;
@@ -135,17 +138,15 @@ public:
 
 	// Обычный алгоритм (параллельная версия)
 	void lu_trivial_parallel_omp() {
-		float *ptr1 = data, *ptr2;
-		float mult;
+		float *ptr1 = data;
 
 		for (int j = 0; j < n-1; ++j, ptr1 += n) {
-			ptr2 = ptr1 + n;
-
-			for (int i = j+1; i < n; ++i, ptr2 += n) {
-				mult = ptr2[j]/ptr1[j];
+		#pragma omp parallel for
+			for (int i = j+1; i < n; ++i) {
+				float *ptr2 = data + i*n;
+				float mult = ptr2[j]/ptr1[j];
 				ptr2[j] = mult;
 
-			#pragma omp parallel for
 				for (int k = j+1; k < n; ++k) {
 					ptr2[k] -= mult*ptr1[k];
 				}
@@ -159,35 +160,25 @@ public:
 		const int bs = ls;		// размер блока
 		int bi = 0, nbi = bs;	// индексы начала текущего и следующего блоков
 
-		//float *buffer = new float[bs*n]; // буфер для блоков матрицы B в матричном умножении
 		buffer<float,1> buf(dptr, range<1>{n*n});
 
 		for (; nbi < n; dptr += bs*(n+1), bi += bs, nbi += bs) {
-			LU(dptr, n, bs);
+			LU(buf, n, bs, bi);
+			LSolve(buf, n, bs, n-nbi, bi);
+			USolve(buf, n, n - nbi, bs, bi);
 
-			LSolve(dptr, dptr + bs, n, bs, n - nbi);
-			USolve(dptr, dptr + bs*n, n, n - nbi, bs);
-
-			//std::cout << n - nbi << std::endl;
-			//FMMS(dptr + bs*n, dptr + bs, n, n - nbi, bs, mbs);
+			std::cout << n - nbi << std::endl;
 			FMMS(buf, n, n-nbi, bi, bs, mbs);
-			//cblas_dgemm(CblasRowMajor, CblasNofloatrans, CblasNofloatrans, n-nbi, bs, n-nbi, -1.0, dptr + bs*n, n, dptr + bs, n, 1.0, dptr + bs*(n+1), n);
 		}
-		LU(dptr, n, n-bi);
-
-		//delete[] buffer;
+		LU(buf, n, n-bi, bi);
 	}
 
-	TYPE* get_ptr() const {
-		return data;
-	}
 
 private:
 	// Общий алгоритм умножения матриц 
 	void Mult(const float* a_ptr, const float* b_ptr, float *c_ptr, const int lda, const int ldb, const int ldc, const int m, const int n, const int p) {
 		//int bp, cp;
 
-	#pragma omp parallel for
 		for (int i = 0; i < m; ++i) {
 			float a_elem, *c_curr = c_ptr + i*ldc;
 			const float *b_curr = b_ptr;
@@ -204,21 +195,21 @@ private:
 	void FMMS(buffer<float,1> &buf, const int lda, const int size, const int shift, const int bs, const int mbs) {
 		sycl::event event = q.submit([&](handler &cgh) {
 
-			sycl::accessor<float, 1, sycl::access::mode::read_write, sycl::access::target::local> buffer(2*bs*bs, cgh);
+			//sycl::accessor<float, 1, sycl::access::mode::read_write, sycl::access::target::local> buffer(2*bs*bs, cgh);
+			sycl::accessor<float, 1, sycl::access::mode::read_write, sycl::access::target::local> block_a(bs*bs, cgh),
+																								  block_b(bs*bs, cgh);
 
 			auto a = buf.get_access<sycl::access::mode::read_write>(cgh, range<1>{lda*lda}, id<1>(shift*(lda+1) + bs*lda));
 			auto b = buf.get_access<sycl::access::mode::read_write>(cgh, range<1>{lda*lda}, id<1>{shift*(lda+1) + bs});
 
 			cgh.parallel_for<class Mult>(nd_range<2>(range<2>(size,size), range<2>(mbs,mbs)), [=](nd_item<2> item) {
-				float* block_a = buffer.get_pointer();
-				float* block_b = block_a + bs*bs;
+				//float* block_a = buffer.get_pointer();
+				//float* block_b = block_a + bs*bs;
 
 				size_t li = item.get_local_id(0);			//локальный индекс в группе (строка)						
 				size_t lj = item.get_local_id(1);
-				uint32_t gi = item.get_global_id(0);
-				uint32_t gj = item.get_global_id(1);
-				//uint32_t gi = bs*item.get_group(0) + li;	//начало номера группы по строке 
-				//uint32_t gj = bs*item.get_group(1) + lj;
+				size_t gi = item.get_global_id(0);
+				size_t gj = item.get_global_id(1);
 
 				block_a[li*bs + lj] = a[gi*lda + lj];
 				block_b[li*bs + lj] = b[li*lda + gj];
@@ -236,7 +227,6 @@ private:
 	}
 
 	void FMMS(float *a_ptr, float *b_ptr, const int lda, const int size, const int bs, const int mbs) {
-		//std::cout << "Call FMMS" << std::endl;
 
 		{
 			buffer<float,1> buf1(a_ptr, range<1>{size*lda-lda+size}); // буфер для матриц A и C
@@ -254,13 +244,10 @@ private:
 					float* block_a = buffer.get_pointer();
 					float* block_b = block_a + bs*bs;
 
-					size_t li = item.get_local_id(0);			//локальный индекс в группе (строка)
-					//size_t shift = li*bs;
+					size_t li = item.get_local_id(0);
 					size_t lj = item.get_local_id(1);
-					uint32_t gi = item.get_global_id(0);
-					uint32_t gj = item.get_global_id(1);
-					//uint32_t gi = bs*item.get_group(0) + li;	//начало номера группы по строке 
-					//uint32_t gj = bs*item.get_group(1) + lj;
+					size_t gi = item.get_global_id(0);
+					size_t gj = item.get_global_id(1);
 
 					block_a[li*bs + lj] = a[gi*lda + lj];
 					block_b[li*bs + lj] = b[li*lda + gj];
@@ -275,7 +262,6 @@ private:
 				});
 			});
 			event.wait();
-			
 			
 			/*
 			q.submit([&](handler &cgh) {
@@ -300,171 +286,93 @@ private:
 				});
 			}).wait();
 			*/
+		}
+	}
 
-			/*
+	void LU(buffer<float,1> &buf, const int lda, const int bs, const int shift) {
+		for (int j = 0; j < bs-1; ++j) {
+
 			q.submit([&](handler &cgh) {
-				auto a_acc = buf1.get_access<sycl::access::mode::read_write>(cgh); // Матрицы А и С
-				auto b_acc = buf2.get_access<sycl::access::mode::read>(cgh); // Матрица B
-				accessor<float, 1, access::mode::read_write, access::target::local> block_a_acc(mbs*bs, cgh); // Матрица A
+				auto a = buf.get_access<access::mode::read_write>(cgh, range<1>{lda*lda - (shift+j)*(lda+1)}, id<1>{(shift+j)*(lda+1)});
 
-				cgh.parallel_for<class Mult>(nd_range<1>(range<1>(size), range<1>(mbs)), [=](nd_item<1> item) {
-					int a_old_shift = item.get_global_id(0)*lda,
-						a_new_shift = item.get_local_id(0)*bs,
-						b_shift = 0;
-
-					for (int j = 0; j < bs; ++j)
-						block_a_acc[a_new_shift + j] = a_acc[a_old_shift + j];
-					item.barrier(access::fence_space::local_space);
-
-					float sum;
-					for (int i = 0; i < size; ++i, b_shift += bs) {
-						sum = 0.0f;
-						for (int j = 0; j < bs; ++j)
-							sum += block_a_acc[a_new_shift + j] * b_acc[b_shift + j];
-						a_acc[a_old_shift + bs + i] -= sum;
-					}
+				cgh.parallel_for(range<1>(bs-1-j), [=](item<1> it) {
+					a[(1+it.get_id(0))*lda] /= a[0];
 				});
 			}).wait();
-			*/
-			
-			//std::cout << "Call submit" << std::endl;
-			/*
+
 			q.submit([&](handler &cgh) {
-				auto a_acc = buf1.get_access<sycl::access::mode::read_write>(cgh);
-				auto b_acc = buf2.get_access<sycl::access::mode::read>(cgh);
+				auto a = buf.get_access<access::mode::read_write>(cgh, range<1>{lda*lda - (shift+j)*(lda+1)}, id<1>{(shift+j)*(lda+1)});
 
-				//std::cout << "Call parallel_for" << std::endl;
-				cgh.parallel_for(range<2>(size,size), [=](item<2> item) {
-					int a0 = item.get_id(0)*lda,
-						b0 = item.get_id(1),
-						bn = b0*n;
-
-						float sum = 0.0f;
-						for (int k = 0; k < bs; ++k)
-							sum += a_acc[a0 + k] * b_acc[bn + k];
-						a_acc[a0 + b0] -= sum;
+				cgh.parallel_for(range<2>(bs-1-j, bs-1-j), [=](item<2> it) {
+					a[(1+it.get_id(0))*lda + 1+it.get_id(1)] -= a[(1+it.get_id(0))*lda] * a[1+it.get_id(1)];
 				});
-				//std::cout << "End of parallel_for" << std::endl;
+			}).wait();
+
+		}
+	}
+
+	void LSolve(buffer<float,1> &buf, const int lda, const int bs, const int n, const int shift) {
+		
+		q.submit([&](handler &cgh) {
+			auto l = buf.get_access<access::mode::read_write>(cgh, range<1>{bs*lda}, id<1>{shift*(lda+1)});
+			auto a = buf.get_access<access::mode::read_write>(cgh, range<1>{bs*lda}, id<1>{shift*(lda+1) + bs});
+
+			cgh.parallel_for(nd_range<1>{range<1>{n}, range<1>{bs}}, [=](nd_item<1> it) {
+				size_t col_shift = it.get_global_id();
+
+				for (size_t j = 0; j < bs-1; ++j) {
+					for (size_t i = j+1; i < bs; ++i)
+						a[col_shift + i*lda] -= l[i*lda + j] * a[col_shift + j*lda];
+				}
 			});
-			*/
-
-			/*
-			q.submit([&](handler &cgh) {
-				auto a_acc = buf1.get_access<sycl::access::mode::read_write>(cgh);
-				auto b_acc = buf2.get_access<sycl::access::mode::read>(cgh);
-				accessor<float, 2, access::mode::read_write, access::target::local> buffer(range(bs,mbs),cgh);
-				//std::cout << "Call parallel_for" << std::endl;
-				cgh.parallel_for(nd_range<2>(range<2>(size,size), range<2>(mbs,mbs)), [=](nd_item<2> item) {
-					int a0 = item.get_global_id(0)*lda,
-						b0 = item.get_global_id(1),
-						bn = b0*n;
-
-					float sum = 0.0f;
-					for (int k = 0; k < bs; ++k)
-						sum += a_acc[a0 + k] * b_acc[bn + k];
-					a_acc[a0 + bs + b0] -= sum;
-				});
-				//std::cout << "End of parallel_for" << std::endl;
-			}).wait();
-			*/
-			
-			
-
-			//std::cout << "End of submit" << std::endl;
-		}
-		//std::cout << "End of FMMS" << std::endl;
+		});
 	}
 
-	// Общее LU-разложение (применяется для блока в матрице)
-	void LU(float *a_ptr, const int lda, const int n) {
-		float *ptr1 = a_ptr, // указатель на текущую вычитаемую строку 
-			  *ptr2,		 // указатель на текущую уменьшаемую строку
-			   mult;		 // множитель, на который умножается вычитаемая строка
+	void USolve(buffer<float,1> &buf, const int lda, const int m, const int bs, const int shift) {
+		
+		q.submit([&](handler &cgh) {
+			auto u = buf.get_access<access::mode::read_write>(cgh, range<1>{bs*lda}, id<1>{shift*(lda+1)});
+			auto a = buf.get_access<access::mode::read_write>(cgh, range<1>{m*lda}, id<1>{shift*(lda+1) + bs*lda});
 
-		for (int j = 0; j < n-1; ++j, ptr1 += lda) {
-			ptr2 = ptr1 + lda;
+			cgh.parallel_for(nd_range<1>{range<1>{m}, range<1>{bs}}, [=](nd_item<1> it) {
+				size_t row_shift = it.get_global_id()*lda;
 
-			for (int i = j+1; i < n; ++i, ptr2 += lda) {
-				mult = ptr2[j]/ptr1[j];
-				ptr2[j] = mult;
+				for (size_t i = 0; i < bs-1; ++i)
+					for (size_t j = i+1; j < bs; ++j)
+						a[row_shift + j] -= u[i*lda + j] / u[i*(lda+1)] * a[row_shift + i];
+			});
+		});
 
-				//#pragma omp parallel for
-				for (int k = j+1; k < n; ++k) {
-					ptr2[k] -= mult*ptr1[k];
-				}
-			}
-		}
+		q.submit([&](handler &cgh) {
+			auto u = buf.get_access<access::mode::read_write>(cgh, range<1>{bs*lda}, id<1>{shift*(lda+1)});
+			auto a = buf.get_access<access::mode::read_write>(cgh, range<1>{m*lda}, id<1>{shift*(lda+1) + bs*lda});
+
+			cgh.parallel_for(nd_range<1>{range<1>{m}, range<1>{bs}}, [=](nd_item<1> it) {
+				size_t row_shift = it.get_global_id()*lda;
+
+				for (size_t i = 0; i < bs; ++i)
+					a[row_shift + i] /= u[i*(lda+1)];
+			});
+		});
 	}
 
-	// Решение системы LX = B; L - верхнетреугольная матрица, X,B - подходящие прямоугольные матрицы (одинакового размера)
-	void LSolve(const float *l_ptr, float *a_ptr, const int lda, const int m, const int n) {
-		// m - высота обеих матриц, n - длина искомой матрицы
-		const int block_size = m, num_of_blocks = (n+m-1)/m;
-
-	#pragma omp parallel for
-		for (int it = 0; it < num_of_blocks; ++it) {
-			int block_len = (it+1 == num_of_blocks) ? ((n % block_size != 0) ? n % block_size : block_size) : block_size; // длина текущего блока
-			float *na_ptr = a_ptr + block_size*it, // указатель на начало текущего блока
-				  *ptr1 = na_ptr,				   // указатель на текущую вычитаемую строку
-				  *ptr2,						   // указатель на текущую уменьшаемую строку
-				   mult;						   // множитель, на который умножается вычитаемая строка
-
-			for (int j = 0; j < block_size - 1; ++j, ptr1 += lda) {
-				ptr2 = ptr1 + lda;
-
-				for (int i = j + 1; i < block_size; ++i, ptr2 += lda) {
-					mult = -l_ptr[i*lda + j];
-
-					for (int k = 0; k < block_len; ++k) {
-						ptr2[k] += mult*ptr1[k];
-					}
-				}
-			}
-		}
-	}
-
-	// Решение системы XU = B; U - верхнетреугольная матрица, X,B - подходящие прямоугольные матрицы (одинакового размера)
-	void USolve(const float *u_ptr, float *a_ptr, const int lda, const int m, const int n) {
-		// m - высота искомой матрицы, n - длина обеих матриц
-		const int block_size = n, num_of_blocks = (m + n - 1)/n;
-
-	#pragma omp parallel for
-		for (int it = 0; it < num_of_blocks; ++it) {
-			int block_len = (it + 1 == num_of_blocks) ? ((m % block_size != 0) ? m % block_size : block_size) : block_size; // высота текущего блока
-			const float *u_curr;					   // указатель на текущую строку верхнетреугольной матрицы
-			float *na_ptr = a_ptr + block_size*it*lda, // указатель на начало блока
-				*a_curr = na_ptr,					   // указатель на текущую строку матрицы в правой части
-				mult;							   // множитель, на который умножается вычитаемый элемент
-
-			for (int k = 0; k < block_len; ++k, a_curr += lda) {
-				u_curr = u_ptr;
-				for (int i = 0; i < block_size-1; ++i, u_curr += lda) {
-					mult = -a_curr[i]/u_curr[i];
-					for (int j = i + 1; j < block_size; ++j) {
-						a_curr[j] += mult*u_curr[j];
-					}
-				}
-			}
-
-			for (int j = 0; j < block_size; ++j) {
-				mult = u_ptr[j*(lda + 1)];
-				for (int k = 0; k < block_len; ++k)
-					na_ptr[k*lda + j] /= mult;
-			}
-		}
-	}
+	
+	// DATA
 
 	float* data;
 	int m, n; // Число строк и столбцов
-	sycl::queue q{cpu_selector{}, property::queue::in_order()};
+	sycl::queue q;
 };
 
-void check_correct(const Matrix &M1, const Matrix &M2, int m, int n) {
-	TYPE *ptr1 = M1.get_ptr(), *ptr2 = M2.get_ptr();
+void check_correct(const Matrix &M1, const Matrix &M2) {
+	if (M1.m != M2.m || M1.n != M2.n)
+		throw "Matrices have different sizes";
+
+	TYPE *ptr1 = M1.data, *ptr2 = M2.data;
 	TYPE ae = 0.0, re = 0.0;
 
 #pragma omp parallel for
-	for (int i = 0; i < m*n; ++i) {
+	for (int i = 0; i < M1.m * M1.n; ++i) {
 		ae = std::max(ae, abs(ptr2[i] - ptr1[i]));
 		re = std::max(re, (ptr1[i] == 0.0f) ? 0.0f : abs(ptr2[i]/ptr1[i] - 1.0f));
 	}
