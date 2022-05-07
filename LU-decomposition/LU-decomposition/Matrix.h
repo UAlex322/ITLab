@@ -74,6 +74,8 @@ public:
 	}
 
 	void print() {
+		cout.precision(8);
+
 		for (int i = 0; i < m; ++i) {
 			for (int j = 0; j < n; ++j)
 				std::cout << std::fixed << data[i*n + j] << " ";
@@ -110,8 +112,6 @@ public:
 
 		return c;
 	}
-
-
 
 	// Обычный алгоритм (последовательная версия)
 	void lu_trivial_sequential() {
@@ -159,7 +159,7 @@ public:
 		#ifdef PARALLEL
 		T *buffer = new T[mbs*bs*omp_get_max_threads()]; // буфер для блоков матрицы B в матричном умножении
 		#else
-		T *buffer = new T[mbs*bs*n]; // буфер для блоков матрицы B в матричном умножении
+		T *buffer = new T[bs*n]; // буфер для блоков матрицы B в матричном умножении
 		#endif
 
 		for (; nbi < n; dptr += bs*(n+1), bi += bs, nbi += bs) {
@@ -167,7 +167,7 @@ public:
 
 			LSolve(dptr, dptr + bs, n, bs, n - nbi);
 			USolve(dptr, dptr + bs*n, n, n - nbi, bs);
-			
+
 			FMMSTranspose(dptr + bs*n, dptr + bs, dptr + bs*(n + 1), buffer, n, n, n, n - nbi, bs, n - nbi, bs, mbs);
 		}
 		LU(dptr, n, n-bi);
@@ -217,9 +217,9 @@ private:
 					*nbt_ptr = buffer + mbs*bs*jb,
 				  #endif
 					 sum;
-
-			for (int j = 0; j < bb_len; ++j)
-				for (int i = 0; i < bs; ++i)
+			
+			for (int i = 0; i < bs; ++i)
+				for (int j = 0; j < bb_len; ++j)
 					nbt_ptr[j*bs + i] = nb_ptr[i*ldb + j];
 
 			for (int i = 0; i < m; ++i, a_curr += lda, c_curr += ldc) {
@@ -240,9 +240,11 @@ private:
 
 		for (int j = 0; j < n-1; ++j, ptr1 += lda) {
 
+		#ifdef PARALLEL
 		#pragma omp parallel for
+		#endif
 			for (int i = j+1; i < n; ++i) {
-				T *ptr2 = data + i*n;		// указатель на текущую уменьшаемую строку
+				T *ptr2 = a_ptr + i*lda;	// указатель на текущую уменьшаемую строку
 				T mult = ptr2[j]/ptr1[j];	// множитель, на который умножается вычитаемая строка
 				ptr2[j] = mult;
 
