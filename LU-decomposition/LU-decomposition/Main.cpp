@@ -3,7 +3,7 @@
 // BLOCK - использовать блочный алгоритм (по умолчанию - обычный)
 
 //#define PARALLEL
-#define BLOCK
+//#define BLOCK
 #define MTX_TYPE float
 
 #include <iostream>
@@ -42,25 +42,36 @@ int main(int argc, char **argv) {
 	else
 		size = 8192;
 
+	cout << "OpenMP, ";
 
-	cout << "Sizes: (" << size << ',' << lu_block << ',' << mtx_product_block << "), ";
+#if !defined(BLOCK) && !defined(PARALLEL)
+	cout << "trivial, seq; ";
+#elif !defined(BLOCK) && defined(PARALLEL)
+	cout << "trivial, par; ";
+#elif defined(BLOCK) && !defined(PARALLEL)
+	cout << "block,   seq; ";
+#elif defined(BLOCK) && defined(PARALLEL)
+	cout << "block,   seq; ";
+#endif
+
+	cout << "sizes: (" << size << ',' << lu_block << ',' << mtx_product_block << "), ";
 
 	Matrix<MTX_TYPE> A(size, size);
-	A.generate_well_conditioned_matrix((float)size * 0.25, 0.04);
+	A.generate_well_conditioned_matrix(0.25f * size, 0.04f);
 
 	auto start_time = steady_clock::now();
-	{
-	#if !defined(BLOCK) && !defined(PARALLEL)
-		A.lu_trivial_sequential();
-	#elif !defined(BLOCK) && defined(PARALLEL)
-		//A.lu_trivial_parallel_omp();
-	#elif defined(BLOCK)
-		A.lu_block(lu_block, mtx_product_block);
-	#endif
-	}
+
+#if !defined(BLOCK) && !defined(PARALLEL)
+	A.lu_trivial_sequential();
+#elif !defined(BLOCK) && defined(PARALLEL)
+	//A.lu_trivial_parallel_omp();
+#elif defined(BLOCK)
+	A.lu_block(lu_block, mtx_product_block);
+#endif
+
 	auto end_time = steady_clock::now();
 
-	cout << "time: " << duration_cast<milliseconds>(end_time-start_time).count() << " ms" << endl << endl;
+	cout << "time: " << duration_cast<milliseconds>(end_time-start_time).count() << " ms" << endl;
 
 	return 0;
 }
