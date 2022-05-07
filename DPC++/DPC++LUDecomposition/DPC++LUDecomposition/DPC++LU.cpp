@@ -1,4 +1,7 @@
-#define TYPE float
+#define MTX_TYPE float
+//#define CHECK_CORRECT
+#define GEN_WELL_COND
+
 #include <vector>
 #include <iostream>
 #include <chrono>
@@ -7,32 +10,60 @@
 using namespace sycl;
 using namespace std;
 
-const int n = 8192;
-const int block_size = 64;
+int64_t sz,
+        lu_block,
+        mtx_product_block;
 
-int main(int argc, char *argv[]) {
+
+int main(int argc, char **argv) {
+
+    // ѕриЄм аргументов из командной строки:
+    // argv[1] - длина матрицы
+    // argv[2] - длина блока в LU-разложении
+    // argv[3] - длина блока в матричном умножении
+    // ¬ умножении идЄт разбиение на блоки 'argv[2] x argv[3]'
+    if (argc > 1) {
+        sz = stoll(argv[1]);
+        lu_block = stoll(argv[2]);
+        mtx_product_block = stoll(argv[3]);
+    }
+    else {
+        sz = 8192;
+        lu_block = mtx_product_block = 64;
+    }
 
     //freopen("dpc++_output1.txt", "a+", stdout);
 
-    std::cout << "Start tests" << std::endl;
-    //for (size_t n = 2000; n <= 16000; n += 2000) {
-        std::cout << "Size: " << n << std::endl;
-        for (size_t i = 0; i < 5; ++i) {
-            Matrix A(n,n), B;
-            A.generate_well_conditioned_matrix(2000.0, 0.04);
-            B = A;
+    cout << "DPC++,  ";
+    cout << "sizes: (" << sz << ',' << lu_block << ',' << mtx_product_block << "), ";
 
-            auto begin = chrono::steady_clock::now();
-            A.lu_block_parallel_dpc(block_size, block_size);
-            auto end = chrono::steady_clock::now();
-            std::cout << "DPC++ time: " << (chrono::duration_cast<chrono::milliseconds>(end - begin)).count() << std::endl;
 
-            B.lu_trivial_sequential();
-            check_correct(A,B,n,n);
 
-            A.print();
-        }
-    //}
+    Matrix A(sz,sz)
+#ifdef CHECK_CORRECT
+    , B // A(n,n), B;
+#endif
+;
+
+#ifdef GEN_WELL_COND
+    A.generate_well_conditioned_matrix(0.5f * sz, 0.4f);
+#else
+    A.generate_random_matrix(10.0);
+#endif
+
+#ifdef CHECK_CORRECT
+    B = A;
+#endif
+        
+    auto begin = chrono::steady_clock::now();
+    A.lu_block_parallel_dpc(lu_block, lu_block);
+    auto end = chrono::steady_clock::now();
+    std::cout << "time: " << (chrono::duration_cast<chrono::milliseconds>(end - begin)).count() << " ms" << std::endl;
+
+#ifdef CHECK_CORRECT
+    B.lu_trivial_sequential();
+    check_correct(A,B);
+#endif
 
     return 0;
 }

@@ -74,7 +74,7 @@ public:
 				std::cin >> data[i*n + j];
 	}
 
-	TYPE* get_ptr() const {
+	MTX_TYPE* get_ptr() const {
 		return data;
 	}
 
@@ -167,6 +167,7 @@ public:
 			LSolve(buf, n, bs, n-nbi, bi);
 			USolve(buf, n, n - nbi, bs, bi);
 
+			std::cout << n - nbi << std::endl;
 			FMMS(buf, n, n-nbi, bi, bs, mbs);
 		}
 		LU(buf, n, n-bi, bi);
@@ -195,7 +196,8 @@ private:
 		sycl::event event = q.submit([&](handler &cgh) {
 
 			//sycl::accessor<float, 1, sycl::access::mode::read_write, sycl::access::target::local> buffer(2*bs*bs, cgh);
-			sycl::accessor<float, 1, sycl::access::mode::read_write, sycl::access::target::local> block_a(bs*bs, cgh), block_b(bs*bs, cgh);
+			sycl::accessor<float, 1, sycl::access::mode::read_write, sycl::access::target::local> block_a(bs*bs, cgh),
+																								  block_b(bs*bs, cgh);
 
 			auto a = buf.get_access<sycl::access::mode::read_write>(cgh, range<1>{lda*lda}, id<1>(shift*(lda+1) + bs*lda));
 			auto b = buf.get_access<sycl::access::mode::read_write>(cgh, range<1>{lda*lda}, id<1>{shift*(lda+1) + bs});
@@ -204,7 +206,7 @@ private:
 				//float* block_a = buffer.get_pointer();
 				//float* block_b = block_a + bs*bs;
 
-				size_t li = item.get_local_id(0);					
+				size_t li = item.get_local_id(0);			//локальный индекс в группе (строка)						
 				size_t lj = item.get_local_id(1);
 				size_t gi = item.get_global_id(0);
 				size_t gj = item.get_global_id(1);
@@ -366,8 +368,8 @@ void check_correct(const Matrix &M1, const Matrix &M2) {
 	if (M1.m != M2.m || M1.n != M2.n)
 		throw "Matrices have different sizes";
 
-	TYPE *ptr1 = M1.data, *ptr2 = M2.data;
-	TYPE ae = 0.0, re = 0.0;
+	MTX_TYPE *ptr1 = M1.data, *ptr2 = M2.data;
+	MTX_TYPE ae = 0.0, re = 0.0;
 
 #pragma omp parallel for
 	for (int i = 0; i < M1.m * M1.n; ++i) {
