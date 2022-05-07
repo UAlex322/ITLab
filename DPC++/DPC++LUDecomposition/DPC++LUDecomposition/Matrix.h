@@ -167,7 +167,6 @@ public:
 			LSolve(buf, n, bs, n-nbi, bi);
 			USolve(buf, n, n - nbi, bs, bi);
 
-			std::cout << n - nbi << std::endl;
 			FMMS(buf, n, n-nbi, bi, bs, mbs);
 		}
 		LU(buf, n, n-bi, bi);
