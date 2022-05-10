@@ -2,26 +2,25 @@
 //#define CHECK_CORRECT
 #define GEN_WELL_COND
 
-#include <vector>
 #include <iostream>
 #include <chrono>
-#include <random>
 #include "Matrix.h"
 using namespace sycl;
 using namespace std;
 
-int64_t sz,
-        lu_block,
-        mtx_product_block;
+int sz,
+    lu_block,
+    mtx_product_block;
 
 
 int main(int argc, char **argv) {
 
-    // ÃÃ°Ã¨Â¸Ã¬ Ã Ã°Ã£Ã³Ã¬Ã¥Ã­Ã²Ã®Ã¢ Ã¨Ã§ ÃªÃ®Ã¬Ã Ã­Ã¤Ã­Ã®Ã© Ã±Ã²Ã°Ã®ÃªÃ¨:
-    // argv[1] - Ã¤Ã«Ã¨Ã­Ã  Ã¬Ã Ã²Ã°Ã¨Ã¶Ã»
-    // argv[2] - Ã¤Ã«Ã¨Ã­Ã  Ã¡Ã«Ã®ÃªÃ  Ã¢ LU-Ã°Ã Ã§Ã«Ã®Ã¦Ã¥Ã­Ã¨Ã¨
-    // argv[3] - Ã¤Ã«Ã¨Ã­Ã  Ã¡Ã«Ã®ÃªÃ  Ã¢ Ã¬Ã Ã²Ã°Ã¨Ã·Ã­Ã®Ã¬ Ã³Ã¬Ã­Ã®Ã¦Ã¥Ã­Ã¨Ã¨
-    // Ã‚ Ã³Ã¬Ã­Ã®Ã¦Ã¥Ã­Ã¨Ã¨ Ã¨Ã¤Â¸Ã² Ã°Ã Ã§Ã¡Ã¨Ã¥Ã­Ã¨Ã¥ Ã­Ã  Ã¡Ã«Ã®ÃªÃ¨ 'argv[2] x argv[3]'
+    // Ïðè¸ì àðãóìåíòîâ èç êîìàíäíîé ñòðîêè:
+    // argv[1] - äëèíà ìàòðèöû
+    // argv[2] - äëèíà áëîêà â LU-ðàçëîæåíèè
+    // argv[3] - äëèíà áëîêà â ìàòðè÷íîì óìíîæåíèè
+    // Â óìíîæåíèè èä¸ò ðàçáèåíèå íà áëîêè 'argv[2] x argv[3]'
+
     if (argc > 1) {
         sz = stoll(argv[1]);
         lu_block = stoll(argv[2]);
@@ -37,14 +36,13 @@ int main(int argc, char **argv) {
     cout << "DPC++,  ";
     cout << "sizes: (" << sz << ',' << lu_block << ',' << mtx_product_block << "), ";
 
+    Matrix A(sz, sz, queue{cpu_selector{}});
 
-
-    Matrix A(sz,sz)
-#ifdef CHECK_CORRECT
-    , B // A(n,n), B;
-#endif
-;
-
+    #ifdef CHECK_CORRECT
+        , B // A(n,n), B;
+    #endif
+        ;
+    
 #ifdef GEN_WELL_COND
     A.generate_well_conditioned_matrix(0.5f * sz, 0.4f);
 #else
@@ -54,7 +52,7 @@ int main(int argc, char **argv) {
 #ifdef CHECK_CORRECT
     B = A;
 #endif
-        
+    
     auto begin = chrono::steady_clock::now();
     A.lu_block_parallel_dpc(lu_block, mtx_product_block);
     auto end = chrono::steady_clock::now();

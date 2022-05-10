@@ -10,8 +10,8 @@ class Matrix {
 public:
 
 	friend void check_correct(const Matrix &M1, const Matrix &M2);
-
-	Matrix(int rows = 0, int cols = 0, const sycl::queue &queue = queue{cpu_selector{}}): m(rows), n(cols), q(queue) {
+	
+	Matrix(int rows = 0, int cols = 0, const sycl::queue &queue = sycl::queue{cpu_selector{}}): m(rows), n(cols), q(queue) {
 		data = new float[m*n];
 	}
 
@@ -106,16 +106,6 @@ public:
 		return *this;
 	}
 
-	Matrix operator*(const Matrix &b) {
-		Matrix c(m, b.n);
-		int p = b.n;
-
-		memset(c.data, 0, m*p*sizeof(float));
-
-		Mult(data, b.data, c.data, n, p, p, m, n, b.n);
-
-		return c;
-	}
 
 	// Обычный алгоритм (последовательная версия)
 	void lu_trivial_sequential() {
@@ -167,7 +157,7 @@ public:
 			LSolve(buf, n, bs, n-nbi, bi);
 			USolve(buf, n, n - nbi, bs, bi);
 
-			std::cout << n - nbi << std::endl;
+			//std::cout << n - nbi << std::endl;
 			FMMS(buf, n, n-nbi, bi, bs, mbs);
 		}
 		LU(buf, n, n-bi, bi);
@@ -206,10 +196,10 @@ private:
 				//float* block_a = buffer.get_pointer();
 				//float* block_b = block_a + bs*bs;
 
-				size_t li = item.get_local_id(0);			//локальный индекс в группе (строка)						
-				size_t lj = item.get_local_id(1);
-				size_t gi = item.get_global_id(0);
-				size_t gj = item.get_global_id(1);
+				int li = item.get_local_id(0);			//локальный индекс в группе (строка)						
+				int lj = item.get_local_id(1);
+				int gi = item.get_global_id(0);
+				int gj = item.get_global_id(1);
 
 				block_a[li*bs + lj] = a[gi*lda + lj];
 				block_b[li*bs + lj] = b[li*lda + gj];
@@ -224,69 +214,6 @@ private:
 			});
 		});
 		event.wait();
-	}
-
-	void FMMS(float *a_ptr, float *b_ptr, const int lda, const int size, const int bs, const int mbs) {
-
-		{
-			buffer<float,1> buf1(a_ptr, range<1>{size*lda-lda+size}); // буфер для матриц A и C
-			buffer<float,1> buf2(b_ptr, range<1>{bs*lda-lda+bs}); // буфер для B
-
-			
-			sycl::event event = q.submit([&](handler& cgh) {
-
-				sycl::accessor<float, 1, sycl::access::mode::read_write, sycl::access::target::local> buffer(2*bs*bs, cgh);
-
-				auto a = buf1.get_access<sycl::access::mode::read_write>(cgh);
-				auto b = buf2.get_access<sycl::access::mode::read>(cgh);
-
-				cgh.parallel_for<class _Mult>(nd_range<2>(range<2>(size,size), range<2>(mbs,mbs)), [=](nd_item<2> item) {
-					float* block_a = buffer.get_pointer();
-					float* block_b = block_a + bs*bs;
-
-					size_t li = item.get_local_id(0);
-					size_t lj = item.get_local_id(1);
-					size_t gi = item.get_global_id(0);
-					size_t gj = item.get_global_id(1);
-
-					block_a[li*bs + lj] = a[gi*lda + lj];
-					block_b[li*bs + lj] = b[li*lda + gj];
-					item.barrier(sycl::access::fence_space::local_space);
-					
-					float sum = 0.0f;
-					for (int k = 0; k < bs; ++k) {
-						sum += block_a[li*bs + k] * block_b[k*bs + lj];
-					}
-					a[gi*lda + bs + gj] -= sum;
-					item.barrier(sycl::access::fence_space::global_space);
-				});
-			});
-			event.wait();
-			
-			/*
-			q.submit([&](handler &cgh) {
-				auto a_acc = buf1.get_access<sycl::access::mode::read>(cgh); // Матрица А
-				auto b_acc = buf2.get_access<sycl::access::mode::read>(cgh); // Матрица B
-				auto c_acc = buf1.get_access<sycl::access::mode::write>(cgh);
-				accessor<float, 1, access::mode::read_write, access::target::local> block_a_acc(mbs*bs, cgh);
-
-				cgh.parallel_for<class Mult>(nd_range<2>(range<2>(size,size), range<2>(mbs,mbs)), [=](nd_item<2> item) {
-					int a_old_shift = item.get_global_id(0)*lda,
-						a_new_shift = item.get_local_id(0)*bs,
-						b_idx		= item.get_global_id(1);
-
-					block_a_acc[a_new_shift + item.get_local_id(1)] = a_acc[a_old_shift + item.get_local_id(1)];
-					item.barrier(access::fence_space::local_space);
-					
-					float sum = 0.0f;
-					for (int j = 0; j < bs; ++j)
-						sum += block_a_acc[a_new_shift + j] * b_acc[j*lda + b_idx];
-					c_acc[a_old_shift + bs + item.get_global_id(1)] -= sum;
-					item.barrier(access::fence_space::local_space);
-				});
-			}).wait();
-			*/
-		}
 	}
 
 	void LU(buffer<float,1> &buf, const int lda, const int bs, const int shift) {
@@ -318,10 +245,10 @@ private:
 			auto a = buf.get_access<access::mode::read_write>(cgh, range<1>{bs*lda}, id<1>{shift*(lda+1) + bs});
 
 			cgh.parallel_for(nd_range<1>{range<1>{n}, range<1>{bs}}, [=](nd_item<1> it) {
-				size_t col_shift = it.get_global_id();
+				int col_shift = it.get_global_id();
 
-				for (size_t j = 0; j < bs-1; ++j) {
-					for (size_t i = j+1; i < bs; ++i)
+				for (int j = 0; j < bs-1; ++j) {
+					for (int i = j+1; i < bs; ++i)
 						a[col_shift + i*lda] -= l[i*lda + j] * a[col_shift + j*lda];
 				}
 			});
@@ -335,10 +262,10 @@ private:
 			auto a = buf.get_access<access::mode::read_write>(cgh, range<1>{m*lda}, id<1>{shift*(lda+1) + bs*lda});
 
 			cgh.parallel_for(nd_range<1>{range<1>{m}, range<1>{bs}}, [=](nd_item<1> it) {
-				size_t row_shift = it.get_global_id()*lda;
+				int row_shift = it.get_global_id()*lda;
 
-				for (size_t i = 0; i < bs-1; ++i)
-					for (size_t j = i+1; j < bs; ++j)
+				for (int i = 0; i < bs-1; ++i)
+					for (int j = i+1; j < bs; ++j)
 						a[row_shift + j] -= u[i*lda + j] / u[i*(lda+1)] * a[row_shift + i];
 			});
 		});
@@ -348,15 +275,14 @@ private:
 			auto a = buf.get_access<access::mode::read_write>(cgh, range<1>{m*lda}, id<1>{shift*(lda+1) + bs*lda});
 
 			cgh.parallel_for(nd_range<1>{range<1>{m}, range<1>{bs}}, [=](nd_item<1> it) {
-				size_t row_shift = it.get_global_id()*lda;
+				int row_shift = it.get_global_id()*lda;
 
-				for (size_t i = 0; i < bs; ++i)
+				for (int i = 0; i < bs; ++i)
 					a[row_shift + i] /= u[i*(lda+1)];
 			});
 		});
 	}
 
-	
 	// DATA
 
 	float* data;
