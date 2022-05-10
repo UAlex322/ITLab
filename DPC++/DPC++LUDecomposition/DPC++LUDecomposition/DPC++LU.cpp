@@ -17,11 +17,11 @@ int64_t sz,
 
 int main(int argc, char **argv) {
 
-    // Ïðè¸ì àðãóìåíòîâ èç êîìàíäíîé ñòðîêè:
-    // argv[1] - äëèíà ìàòðèöû
-    // argv[2] - äëèíà áëîêà â LU-ðàçëîæåíèè
-    // argv[3] - äëèíà áëîêà â ìàòðè÷íîì óìíîæåíèè
-    // Â óìíîæåíèè èä¸ò ðàçáèåíèå íà áëîêè 'argv[2] x argv[3]'
+    // ÃÃ°Ã¨Â¸Ã¬ Ã Ã°Ã£Ã³Ã¬Ã¥Ã­Ã²Ã®Ã¢ Ã¨Ã§ ÃªÃ®Ã¬Ã Ã­Ã¤Ã­Ã®Ã© Ã±Ã²Ã°Ã®ÃªÃ¨:
+    // argv[1] - Ã¤Ã«Ã¨Ã­Ã  Ã¬Ã Ã²Ã°Ã¨Ã¶Ã»
+    // argv[2] - Ã¤Ã«Ã¨Ã­Ã  Ã¡Ã«Ã®ÃªÃ  Ã¢ LU-Ã°Ã Ã§Ã«Ã®Ã¦Ã¥Ã­Ã¨Ã¨
+    // argv[3] - Ã¤Ã«Ã¨Ã­Ã  Ã¡Ã«Ã®ÃªÃ  Ã¢ Ã¬Ã Ã²Ã°Ã¨Ã·Ã­Ã®Ã¬ Ã³Ã¬Ã­Ã®Ã¦Ã¥Ã­Ã¨Ã¨
+    // Ã‚ Ã³Ã¬Ã­Ã®Ã¦Ã¥Ã­Ã¨Ã¨ Ã¨Ã¤Â¸Ã² Ã°Ã Ã§Ã¡Ã¨Ã¥Ã­Ã¨Ã¥ Ã­Ã  Ã¡Ã«Ã®ÃªÃ¨ 'argv[2] x argv[3]'
     if (argc > 1) {
         sz = stoll(argv[1]);
         lu_block = stoll(argv[2]);
@@ -56,7 +56,7 @@ int main(int argc, char **argv) {
 #endif
         
     auto begin = chrono::steady_clock::now();
-    A.lu_block_parallel_dpc(lu_block, lu_block);
+    A.lu_block_parallel_dpc(lu_block, mtx_product_block);
     auto end = chrono::steady_clock::now();
     std::cout << "time: " << (chrono::duration_cast<chrono::milliseconds>(end - begin)).count() << " ms" << std::endl;
 
